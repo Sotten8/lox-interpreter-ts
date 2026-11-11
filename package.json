@@ -1,0 +1,28 @@
+{
+  "name": "lox-interpreter-ts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lox interpreter in TypeScript",
+  "homepage": "https://github.com/Sotten8/lox-interpreter-ts#readme",
+  "bugs": {
+    "url": "https://github.com/Sotten8/lox-interpreter-ts/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sotten8/lox-interpreter-ts.git"
+  },
+  "license": "ISC",
+  "author": "Stanislav Oleksiichuk",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
