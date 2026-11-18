@@ -17,7 +17,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "lox": "tsx src/main.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
