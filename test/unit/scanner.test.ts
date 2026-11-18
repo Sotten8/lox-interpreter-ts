@@ -3,8 +3,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { formatCompileError } from '../../src/errors';
-import { scan } from '../../src/scanner';
-import type { TokenType } from '../../src/token';
+import { scan } from '../../src/syntax/scanner';
+import type { TokenType } from '../../src/syntax/token';
 import { parseExpectations } from '../official/expectations';
 
 const types = (source: string): TokenType[] =>

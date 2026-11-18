@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { formatCompileError } from '../../src/errors';
-import { printStmt } from '../../src/ast-printer';
-import { parse, type ParseResult } from '../../src/parser';
-import { scan } from '../../src/scanner';
+import { printStmt } from '../../src/syntax/ast-printer';
+import { parse, type ParseResult } from '../../src/syntax/parser';
+import { scan } from '../../src/syntax/scanner';
 
 const parseSource = (source: string): ParseResult => parse(scan(source).tokens);
 

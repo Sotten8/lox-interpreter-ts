@@ -1,4 +1,4 @@
-import type { CompileError } from './errors';
+import type { CompileError } from '../errors';
 import {
   KEYWORDS,
   type Token,

@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { scan } from '../../src/scanner';
+import { scan } from '../../src/syntax/scanner';
 
 const FRAGMENTS = [
   'var ',
