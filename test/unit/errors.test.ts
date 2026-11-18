@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { formatCompileError } from '../../src/errors';
+import {
+  RuntimeError,
+  formatCompileError,
+  formatRuntimeError,
+} from '../../src/errors';
 
 describe('formatCompileError', () => {
   it('formats an error without a place', () => {
@@ -26,5 +30,23 @@ describe('formatCompileError', () => {
     expect(formatCompileError(error)).toBe(
       "[line 1] Error at ';': Expect expression.",
     );
+  });
+});
+
+describe('formatRuntimeError', () => {
+  it('puts the line after the message', () => {
+    const error = new RuntimeError(4, 'Operand must be a number.');
+
+    expect(formatRuntimeError(error)).toBe(
+      'Operand must be a number.\n[line 4]',
+    );
+  });
+
+  it('stores the line and the message', () => {
+    const error = new RuntimeError(9, 'Bad.');
+
+    expect(error).toBeInstanceOf(Error);
+    expect(error.line).toBe(9);
+    expect(error.message).toBe('Bad.');
   });
 });
