@@ -2,6 +2,7 @@ import type {
   Expr,
   UnaryExpr,
   BinaryExpr,
+  CallExpr,
   LogicalExpr,
   Stmt,
 } from '../syntax/ast';
@@ -149,7 +150,20 @@ export class Interpreter {
         this.environment.assign(expr.name, value);
         return value;
       }
+      case 'call':
+        return this.evaluateCall(expr);
     }
+  }
+
+  private evaluateCall(expr: CallExpr): LoxValue {
+    this.evaluate(expr.callee);
+    for (const argument of expr.args) {
+      this.evaluate(argument);
+    }
+    throw new RuntimeError(
+      expr.paren.line,
+      'Can only call functions and classes.',
+    );
   }
 
   private evaluateUnary(expr: UnaryExpr): LoxValue {

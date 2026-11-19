@@ -43,6 +43,13 @@ export interface AssignExpr {
   readonly value: Expr;
 }
 
+export interface CallExpr {
+  readonly kind: 'call';
+  readonly callee: Expr;
+  readonly paren: Token;
+  readonly args: readonly Expr[];
+}
+
 export type Expr =
   | LiteralExpr
   | GroupingExpr
@@ -50,7 +57,8 @@ export type Expr =
   | BinaryExpr
   | LogicalExpr
   | VariableExpr
-  | AssignExpr;
+  | AssignExpr
+  | CallExpr;
 
 export interface ExpressionStmt {
   readonly kind: 'expression';
