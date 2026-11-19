@@ -13,7 +13,7 @@ export interface Expectations {
   readonly exitCode: ExpectedExitCode;
 }
 
-const IMPLEMENTATION = "java";
+const IMPLEMENTATION = 'java';
 
 const OUTPUT_PATTERN = /\/\/ expect: ?(.*)/;
 const COMPILE_ERROR_PATTERN = /\/\/ (Error.*)/;
@@ -26,7 +26,7 @@ export function parseExpectations(source: string): Expectations {
   const compileErrors: string[] = [];
   let runtimeError: RuntimeErrorExpectation | null = null;
 
-  for (const [index, text] of source.split("\n").entries()) {
+  for (const [index, text] of source.split('\n').entries()) {
     const lineNumber = index + 1;
 
     if (NON_TEST_PATTERN.test(text)) {
@@ -41,13 +41,13 @@ export function parseExpectations(source: string): Expectations {
 
     const outputMatch = OUTPUT_PATTERN.exec(text);
     if (outputMatch !== null) {
-      output.push(outputMatch[1] ?? "");
+      output.push(outputMatch[1] ?? '');
       continue;
     }
 
     const errorMatch = COMPILE_ERROR_PATTERN.exec(text);
     if (errorMatch !== null) {
-      compileErrors.push(`[${lineNumber}] ${errorMatch[1] ?? ""}`);
+      compileErrors.push(`[${lineNumber}] ${errorMatch[1] ?? ''}`);
       continue;
     }
 
@@ -56,7 +56,7 @@ export function parseExpectations(source: string): Expectations {
       const implementation = errorLineMatch[2];
       if (implementation === undefined || implementation === IMPLEMENTATION) {
         compileErrors.push(
-          `[${errorLineMatch[3] ?? ""}] ${errorLineMatch[4] ?? ""}`,
+          `[${errorLineMatch[3] ?? ''}] ${errorLineMatch[4] ?? ''}`,
         );
       }
       continue;
@@ -64,12 +64,12 @@ export function parseExpectations(source: string): Expectations {
 
     const runtimeMatch = RUNTIME_ERROR_PATTERN.exec(text);
     if (runtimeMatch !== null) {
-      runtimeError = { line: lineNumber, message: runtimeMatch[1] ?? "" };
+      runtimeError = { line: lineNumber, message: runtimeMatch[1] ?? '' };
     }
   }
 
   if (runtimeError !== null && compileErrors.length > 0) {
-    throw new Error("Test expects both a compile error and a runtime error");
+    throw new Error('Test expects both a compile error and a runtime error');
   }
 
   let exitCode: ExpectedExitCode = 0;

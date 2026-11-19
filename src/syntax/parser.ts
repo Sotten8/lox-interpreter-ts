@@ -1,0 +1,213 @@
+import type { Expr, Stmt } from './ast';
+import type { CompileError } from '../errors';
+import type { Token, TokenType } from './token';
+
+export interface ParseResult {
+  readonly statements: readonly Stmt[];
+  readonly errors: readonly CompileError[];
+}
+
+class ParseError extends Error {}
+
+const STATEMENT_KEYWORDS: ReadonlySet<TokenType> = new Set<TokenType>([
+  'CLASS',
+  'FUN',
+  'VAR',
+  'FOR',
+  'IF',
+  'WHILE',
+  'PRINT',
+  'RETURN',
+]);
+
+class Parser {
+  private readonly tokens: readonly Token[];
+  private readonly errors: CompileError[] = [];
+  private current = 0;
+
+  constructor(tokens: readonly Token[]) {
+    this.tokens = tokens;
+  }
+
+  parse(): ParseResult {
+    const statements: Stmt[] = [];
+    while (!this.isAtEnd()) {
+      const statement = this.declaration();
+      if (statement !== null) {
+        statements.push(statement);
+      }
+    }
+    return { statements, errors: this.errors };
+  }
+
+  private declaration(): Stmt | null {
+    try {
+      return this.statement();
+    } catch (error) {
+      if (error instanceof ParseError) {
+        this.synchronize();
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  private statement(): Stmt {
+    if (this.match('PRINT')) {
+      return this.printStatement();
+    }
+    return this.expressionStatement();
+  }
+
+  private printStatement(): Stmt {
+    const expression = this.expression();
+    this.consume('SEMICOLON', "Expect ';' after value.");
+    return { kind: 'print', expression };
+  }
+
+  private expressionStatement(): Stmt {
+    const expression = this.expression();
+    this.consume('SEMICOLON', "Expect ';' after expression.");
+    return { kind: 'expression', expression };
+  }
+
+  private expression(): Expr {
+    return this.equality();
+  }
+
+  private equality(): Expr {
+    return this.leftAssociative(
+      () => this.comparison(),
+      ['BANG_EQUAL', 'EQUAL_EQUAL'],
+    );
+  }
+
+  private comparison(): Expr {
+    return this.leftAssociative(
+      () => this.term(),
+      ['GREATER', 'GREATER_EQUAL', 'LESS', 'LESS_EQUAL'],
+    );
+  }
+
+  private term(): Expr {
+    return this.leftAssociative(() => this.factor(), ['MINUS', 'PLUS']);
+  }
+
+  private factor(): Expr {
+    return this.leftAssociative(() => this.unary(), ['SLASH', 'STAR']);
+  }
+
+  private leftAssociative(
+    operand: () => Expr,
+    operators: readonly TokenType[],
+  ): Expr {
+    let expr = operand();
+    while (this.match(...operators)) {
+      const operator = this.previous();
+      const right = operand();
+      expr = { kind: 'binary', left: expr, operator, right };
+    }
+    return expr;
+  }
+
+  private unary(): Expr {
+    if (this.match('BANG', 'MINUS')) {
+      const operator = this.previous();
+      const right = this.unary();
+      return { kind: 'unary', operator, right };
+    }
+    return this.primary();
+  }
+
+  private primary(): Expr {
+    if (this.match('FALSE')) {
+      return { kind: 'literal', value: false };
+    }
+    if (this.match('TRUE')) {
+      return { kind: 'literal', value: true };
+    }
+    if (this.match('NIL')) {
+      return { kind: 'literal', value: null };
+    }
+    if (this.match('NUMBER', 'STRING')) {
+      return { kind: 'literal', value: this.previous().literal };
+    }
+    if (this.match('LEFT_PAREN')) {
+      const expression = this.expression();
+      this.consume('RIGHT_PAREN', "Expect ')' after expression.");
+      return { kind: 'grouping', expression };
+    }
+    throw this.error(this.peek(), 'Expect expression.');
+  }
+
+  private match(...types: readonly TokenType[]): boolean {
+    for (const type of types) {
+      if (this.check(type)) {
+        this.advance();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private consume(type: TokenType, message: string): Token {
+    if (this.check(type)) {
+      return this.advance();
+    }
+    throw this.error(this.peek(), message);
+  }
+
+  private check(type: TokenType): boolean {
+    return !this.isAtEnd() && this.peek().type === type;
+  }
+
+  private advance(): Token {
+    if (!this.isAtEnd()) {
+      this.current++;
+    }
+    return this.previous();
+  }
+
+  private isAtEnd(): boolean {
+    return this.peek().type === 'EOF';
+  }
+
+  private peek(): Token {
+    return this.tokens[this.current] as Token;
+  }
+
+  private previous(): Token {
+    return this.tokens[this.current - 1] as Token;
+  }
+
+  private error(token: Token, message: string): ParseError {
+    const where = token.type === 'EOF' ? 'at end' : `at '${token.lexeme}'`;
+    this.errors.push({
+      line: token.line,
+      column: token.column,
+      where,
+      message,
+    });
+    return new ParseError(message);
+  }
+
+  private synchronize(): void {
+    this.advance();
+    while (!this.isAtEnd()) {
+      if (this.previous().type === 'SEMICOLON') {
+        return;
+      }
+      if (STATEMENT_KEYWORDS.has(this.peek().type)) {
+        return;
+      }
+      this.advance();
+    }
+  }
+}
+
+export function parse(tokens: readonly Token[]): ParseResult {
+  if (tokens[tokens.length - 1]?.type !== 'EOF') {
+    throw new Error('Token list must end with an EOF token.');
+  }
+  return new Parser(tokens).parse();
+}
