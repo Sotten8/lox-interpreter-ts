@@ -111,6 +111,75 @@ describe('parse: variables', () => {
   });
 });
 
+describe('parse: assignment', () => {
+  it('groups assignments from right to left', () => {
+    expect(exprTree('a = 1')).toBe('(= a 1)');
+    expect(exprTree('a = b = 1')).toBe('(= a (= b 1))');
+    expect(exprTree('a = b = c = nil')).toBe('(= a (= b (= c nil)))');
+    expect(exprTree('a = 1 + 2')).toBe('(= a (+ 1 2))');
+    expect(exprTree('a = b == c')).toBe('(= a (== b c))');
+    expect(exprTree('(a = 1) + 2')).toBe('(+ (group (= a 1)) 2)');
+    expect(trees('var a = b = 1;')).toEqual(['(var a (= b 1))']);
+  });
+
+  it('reports a target that is not a variable and keeps parsing', () => {
+    for (const source of ['1 = 2;', 'a + b = c;', '(a) = 1;', '-a = 1;']) {
+      const errors = errorsOf(source);
+
+      expect(errors, source).toHaveLength(1);
+      expect(errors[0], source).toMatch(
+        /^\[line 1\] Error at '=': Invalid assignment target\.$/,
+      );
+    }
+    expect(errorsOf('a + b = c;\nprint 1;')).toHaveLength(1);
+    expect(trees('a + b = c;\nprint 1;')).toEqual([
+      '(expr (+ a b))',
+      '(print 1)',
+    ]);
+    expect(parseSource('1 +\n  2 = 3;').errors[0]).toMatchObject({
+      line: 2,
+      column: 5,
+      where: "at '='",
+    });
+  });
+});
+
+describe('parse: blocks', () => {
+  it('parses blocks with any number of statements', () => {
+    expect(trees('{}')).toEqual(['(block)']);
+    expect(trees('{ 1; }')).toEqual(['(block (expr 1))']);
+    expect(trees('{ var a = 1; print a; }')).toEqual([
+      '(block (var a 1) (print a))',
+    ]);
+    expect(trees('{ { 1; } {} } print 2;')).toEqual([
+      '(block (block (expr 1)) (block))',
+      '(print 2)',
+    ]);
+  });
+
+  it('reports a block that is not closed', () => {
+    expect(errorsOf('{ print 1;')).toEqual([
+      "[line 1] Error at end: Expect '}' after block.",
+    ]);
+    expect(errorsOf('{')).toEqual([
+      "[line 1] Error at end: Expect '}' after block.",
+    ]);
+    expect(errorsOf('{ { print 1; }')).toEqual([
+      "[line 1] Error at end: Expect '}' after block.",
+    ]);
+  });
+
+  it('recovers after an error in a block', () => {
+    const result = parseSource('{ print ; print 2; }\nprint 3;');
+
+    expect(result.statements.map(printStmt)).toEqual([
+      '(block (print 2))',
+      '(print 3)',
+    ]);
+    expect(result.errors).toHaveLength(1);
+  });
+});
+
 describe('parse: errors and recovery', () => {
   it.each([
     ['1 + ;', ["[line 1] Error at ';': Expect expression."]],

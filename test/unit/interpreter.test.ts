@@ -146,6 +146,79 @@ describe('interpret: variables', () => {
   });
 });
 
+describe('interpret: assignment', () => {
+  it('changes a variable and gives back the assigned value', () => {
+    expect(outputOf('var a = 1; a = 2; print a;')).toEqual(['2']);
+    expect(outputOf('var a; print a = 3; print a;')).toEqual(['3', '3']);
+    expect(outputOf('var a = 1; a = a + 1; print a;')).toEqual(['2']);
+    expect(outputOf('var a = 1; a = nil; print a;')).toEqual(['nil']);
+    expect(outputOf('var a; var b; a = b = 4; print a; print b;')).toEqual([
+      '4',
+      '4',
+    ]);
+  });
+
+  it('does not create a variable and evaluates the value first', () => {
+    expect(errorOf('a = 1;')).toBe("Undefined variable 'a'.\n[line 1]");
+    expect(errorOf('var b;\n\nx = 1;')).toBe(
+      "Undefined variable 'x'.\n[line 3]",
+    );
+    expect(errorOf('constructor = 1;')).toBe(
+      "Undefined variable 'constructor'.\n[line 1]",
+    );
+    expect(errorOf('x = y;')).toBe("Undefined variable 'y'.\n[line 1]");
+    expect(errorOf('x = -"s";')).toBe('Operand must be a number.\n[line 1]');
+  });
+});
+
+describe('interpret: blocks', () => {
+  it('hides block variables from the outside', () => {
+    expect(outputOf('{ print 1; print 2; }')).toEqual(['1', '2']);
+    expect(outputOf('{} {{}}')).toEqual([]);
+    expect(outputOf('{ var a = 1; print a; }')).toEqual(['1']);
+    expect(errorOf('{ var a = 1; }\nprint a;')).toBe(
+      "Undefined variable 'a'.\n[line 2]",
+    );
+    expect(errorOf('{ { var a = 1; } print a; }')).toBe(
+      "Undefined variable 'a'.\n[line 1]",
+    );
+  });
+
+  it('allows an inner variable to shadow an outer one', () => {
+    expect(
+      outputOf(
+        'var a = "global";\n{ var a = "outer"; { var a = "inner"; print a; }\nprint a; }\nprint a;',
+      ),
+    ).toEqual(['inner', 'outer', 'global']);
+    expect(outputOf('var a = 1; { var a = a + 1; print a; } print a;')).toEqual(
+      ['2', '1'],
+    );
+  });
+
+  it('changes an outer variable from inside a block', () => {
+    expect(outputOf('var a = 1; { a = 2; } print a;')).toEqual(['2']);
+    expect(
+      outputOf('var a = 1; { { a = a + 1; } a = a * 10; } print a;'),
+    ).toEqual(['20']);
+    expect(outputOf('var a = 1; { var a = 5; a = 6; } print a;')).toEqual([
+      '1',
+    ]);
+  });
+
+  it('leaves the block scope after a runtime error', () => {
+    const lines: string[] = [];
+    const interpreter = new Interpreter((line) => lines.push(line));
+    const run = (source: string): RuntimeError | null =>
+      interpreter.interpret(parse(scan(source).tokens).statements);
+
+    expect(
+      run('var a = "outer"; { var a = "inner"; print -"x"; }')?.message,
+    ).toBe('Operand must be a number.');
+    expect(run('print a;')).toBeNull();
+    expect(lines).toEqual(['outer']);
+  });
+});
+
 describe('interpret: runtime errors', () => {
   it('reports operands of the wrong type', () => {
     for (const source of ['-"s";', '-nil;']) {
