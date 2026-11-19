@@ -88,6 +88,29 @@ describe('parse: priority and associativity', () => {
   });
 });
 
+describe('parse: variables', () => {
+  it('parses declarations and names in expressions', () => {
+    expect(trees('var a;')).toEqual(['(var a)']);
+    expect(trees('var a = 1 + 2 * b;')).toEqual(['(var a (+ 1 (* 2 b)))']);
+    expect(trees('print a; var a = nil; a;')).toEqual([
+      '(print a)',
+      '(var a nil)',
+      '(expr a)',
+    ]);
+    expect(exprTree('-a == !b')).toBe('(== (- a) (! b))');
+  });
+
+  it('recovers after a broken declaration', () => {
+    const result = parseSource('var 1 = 2;\nvar b = 3;\nvar ;\nprint b;');
+
+    expect(result.statements.map(printStmt)).toEqual([
+      '(var b 3)',
+      '(print b)',
+    ]);
+    expect(result.errors).toHaveLength(2);
+  });
+});
+
 describe('parse: errors and recovery', () => {
   it.each([
     ['1 + ;', ["[line 1] Error at ';': Expect expression."]],
@@ -96,6 +119,16 @@ describe('parse: errors and recovery', () => {
     ['1 + 2', ["[line 1] Error at end: Expect ';' after expression."]],
     ['print 1 2;', ["[line 1] Error at '2': Expect ';' after value."]],
     ['\n\n)', ["[line 3] Error at ')': Expect expression."]],
+    ['var 1;', ["[line 1] Error at '1': Expect variable name."]],
+    ['var', ['[line 1] Error at end: Expect variable name.']],
+    [
+      'var a = 1',
+      ["[line 1] Error at end: Expect ';' after variable declaration."],
+    ],
+    [
+      'var a 1;',
+      ["[line 1] Error at '1': Expect ';' after variable declaration."],
+    ],
   ])('reports an error for %j', (source, messages) => {
     expect(errorsOf(source)).toEqual(messages);
   });
