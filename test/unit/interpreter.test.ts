@@ -110,6 +110,42 @@ describe('interpret: expressions', () => {
   });
 });
 
+describe('interpret: variables', () => {
+  it('stores values of every kind and gives nil to a bare declaration', () => {
+    expect(outputOf('var a = 1; print a;')).toEqual(['1']);
+    expect(outputOf('var a = "text"; print a;')).toEqual(['text']);
+    expect(outputOf('var a = false; print a;')).toEqual(['false']);
+    expect(outputOf('var a = nil; print a;')).toEqual(['nil']);
+    expect(outputOf('var a; print a;')).toEqual(['nil']);
+    expect(outputOf('var a = 1; var b;')).toEqual([]);
+  });
+
+  it('allows a global variable be declared again', () => {
+    expect(outputOf('var a = 1; var a = 2; print a;')).toEqual(['2']);
+    expect(outputOf('var a = 1; var a = a + 1; print a;')).toEqual(['2']);
+    expect(outputOf('var a = 1; var a; print a;')).toEqual(['nil']);
+    expect(outputOf('var a = 1; var b = a + 2; print b * a;')).toEqual(['3']);
+  });
+
+  it('treats names of JavaScript objects as variables', () => {
+    expect(errorOf('print constructor;')).toBe(
+      "Undefined variable 'constructor'.\n[line 1]",
+    );
+    expect(outputOf('var toString = 1; print toString;')).toEqual(['1']);
+  });
+
+  it('reports an undefined variable with the line of the name', () => {
+    expect(errorOf('print x;')).toBe("Undefined variable 'x'.\n[line 1]");
+    expect(errorOf('var a = 1;\nprint a +\nb;')).toBe(
+      "Undefined variable 'b'.\n[line 3]",
+    );
+    expect(errorOf('var a = a;')).toBe("Undefined variable 'a'.\n[line 1]");
+    expect(errorOf('var a = -"s";')).toBe(
+      'Operand must be a number.\n[line 1]',
+    );
+  });
+});
+
 describe('interpret: runtime errors', () => {
   it('reports operands of the wrong type', () => {
     for (const source of ['-"s";', '-nil;']) {
