@@ -180,6 +180,57 @@ describe('parse: blocks', () => {
   });
 });
 
+describe('parse: logical operators', () => {
+  it('groups logical operators by priority', () => {
+    expect(exprTree('a or b and c')).toBe('(or a (and b c))');
+    expect(exprTree('a and b or c')).toBe('(or (and a b) c)');
+    expect(exprTree('a or b or c')).toBe('(or (or a b) c)');
+    expect(exprTree('a and b and c')).toBe('(and (and a b) c)');
+    expect(exprTree('a == b and c != d')).toBe('(and (== a b) (!= c d))');
+    expect(exprTree('a = b or c')).toBe('(= a (or b c))');
+    expect(errorsOf('a or b = c;')).toEqual([
+      "[line 1] Error at '=': Invalid assignment target.",
+    ]);
+  });
+});
+
+describe('parse: if', () => {
+  it('parses if and else', () => {
+    expect(trees('if (a) 1;')).toEqual(['(if a (expr 1))']);
+    expect(trees('if (a) 1; else 2;')).toEqual(['(if a (expr 1) (expr 2))']);
+    expect(trees('if (a = 1) 2; print 3;')).toEqual([
+      '(if (= a 1) (expr 2))',
+      '(print 3)',
+    ]);
+    expect(trees('if (a) { 1; } else { 2; }')).toEqual([
+      '(if a (block (expr 1)) (block (expr 2)))',
+    ]);
+    expect(trees('if (a) 1; else if (b) 2; else 3;')).toEqual([
+      '(if a (expr 1) (if b (expr 2) (expr 3)))',
+    ]);
+    expect(trees('if (a) if (b) 1; else 2;')).toEqual([
+      '(if a (if b (expr 1) (expr 2)))',
+    ]);
+    expect(trees('if (a) { if (b) 1; } else 2;')).toEqual([
+      '(if a (block (if b (expr 1))) (expr 2))',
+    ]);
+  });
+
+  it('reports a broken if', () => {
+    const cases: [string, string][] = [
+      ['if a) 1;', "[line 1] Error at 'a': Expect '(' after 'if'."],
+      ['if (a 1;', "[line 1] Error at '1': Expect ')' after if condition."],
+      ['if (a) var b;', "[line 1] Error at 'var': Expect expression."],
+      ['if (a) 1; else var b;', "[line 1] Error at 'var': Expect expression."],
+    ];
+
+    for (const [source, message] of cases) {
+      expect(errorsOf(source), source).toEqual([message]);
+    }
+    expect(trees('if (a 1; print 2;')).toEqual(['(print 2)']);
+  });
+});
+
 describe('parse: errors and recovery', () => {
   it.each([
     ['1 + ;', ["[line 1] Error at ';': Expect expression."]],

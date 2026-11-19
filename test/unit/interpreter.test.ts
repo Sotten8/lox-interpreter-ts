@@ -219,6 +219,71 @@ describe('interpret: blocks', () => {
   });
 });
 
+describe('interpret: logical operators', () => {
+  it('returns an operand, not a boolean', () => {
+    expectPrinted([
+      ['nil or "yes"', 'yes'],
+      ['"a" or "b"', 'a'],
+      ['false and 1', 'false'],
+      ['1 and 2', '2'],
+      ['0 or 1', '0'],
+      ['"" and "ok"', 'ok'],
+      ['nil and 1 or 2', '2'],
+      ['1 == 1 and 2 < 3', 'true'],
+    ]);
+  });
+
+  it('skips the right operand when the left one decides', () => {
+    expect(outputOf('var a = 1; false and (a = 2); print a;')).toEqual(['1']);
+    expect(outputOf('var a = 1; true or (a = 2); print a;')).toEqual(['1']);
+    expect(outputOf('var a = 1; nil or (a = 2); print a;')).toEqual(['2']);
+    expect(outputOf('var a = 1; true and (a = 2); print a;')).toEqual(['2']);
+    expect(errorOf('true or -"x";')).toBeNull();
+    expect(errorOf('nil or -"x";')).toBe('Operand must be a number.\n[line 1]');
+    expect(errorOf('-"x" or y;')).toBe('Operand must be a number.\n[line 1]');
+  });
+});
+
+describe('interpret: if', () => {
+  it('picks one branch by truthiness', () => {
+    const cases: [string, string[]][] = [
+      ['if (true) print 1;', ['1']],
+      ['if (false) print 1;', []],
+      ['if (false) print 1; else print 2;', ['2']],
+      ['if (nil) print 1; else print 2;', ['2']],
+      ['if (0) print 1; else print 2;', ['1']],
+      ['if ("") print 1; else print 2;', ['1']],
+      ['var n = 0; if (n = n + 1) print n;', ['1']],
+    ];
+
+    for (const [source, lines] of cases) {
+      expect(outputOf(source), source).toEqual(lines);
+    }
+
+    const chain = (n: number): string =>
+      `var a = ${n}; if (a == 1) print "one"; else if (a == 2) print "two"; else print "many";`;
+
+    expect(outputOf(chain(1))).toEqual(['one']);
+    expect(outputOf(chain(2))).toEqual(['two']);
+    expect(outputOf(chain(3))).toEqual(['many']);
+    expect(outputOf('if (true) if (false) print 1; else print 2;')).toEqual([
+      '2',
+    ]);
+    expect(outputOf('if (false) if (true) print 1; else print 2;')).toEqual([]);
+    expect(errorOf('if (false) print y;')).toBeNull();
+    expect(errorOf('if (true) print 1; else print y;')).toBeNull();
+    expect(errorOf('if (true) print y;')).toBe(
+      "Undefined variable 'y'.\n[line 1]",
+    );
+    expect(errorOf('if (false) print 1; else print y;')).toBe(
+      "Undefined variable 'y'.\n[line 1]",
+    );
+    expect(errorOf('if (-"x") print 1;')).toBe(
+      'Operand must be a number.\n[line 1]',
+    );
+  });
+});
+
 describe('interpret: runtime errors', () => {
   it('reports operands of the wrong type', () => {
     for (const source of ['-"s";', '-nil;']) {
