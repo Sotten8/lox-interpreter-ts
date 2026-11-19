@@ -110,6 +110,237 @@ describe('interpret: expressions', () => {
   });
 });
 
+describe('interpret: variables', () => {
+  it('stores values of every kind and gives nil to a bare declaration', () => {
+    expect(outputOf('var a = 1; print a;')).toEqual(['1']);
+    expect(outputOf('var a = "text"; print a;')).toEqual(['text']);
+    expect(outputOf('var a = false; print a;')).toEqual(['false']);
+    expect(outputOf('var a = nil; print a;')).toEqual(['nil']);
+    expect(outputOf('var a; print a;')).toEqual(['nil']);
+    expect(outputOf('var a = 1; var b;')).toEqual([]);
+  });
+
+  it('allows a global variable be declared again', () => {
+    expect(outputOf('var a = 1; var a = 2; print a;')).toEqual(['2']);
+    expect(outputOf('var a = 1; var a = a + 1; print a;')).toEqual(['2']);
+    expect(outputOf('var a = 1; var a; print a;')).toEqual(['nil']);
+    expect(outputOf('var a = 1; var b = a + 2; print b * a;')).toEqual(['3']);
+  });
+
+  it('treats names of JavaScript objects as variables', () => {
+    expect(errorOf('print constructor;')).toBe(
+      "Undefined variable 'constructor'.\n[line 1]",
+    );
+    expect(outputOf('var toString = 1; print toString;')).toEqual(['1']);
+  });
+
+  it('reports an undefined variable with the line of the name', () => {
+    expect(errorOf('print x;')).toBe("Undefined variable 'x'.\n[line 1]");
+    expect(errorOf('var a = 1;\nprint a +\nb;')).toBe(
+      "Undefined variable 'b'.\n[line 3]",
+    );
+    expect(errorOf('var a = a;')).toBe("Undefined variable 'a'.\n[line 1]");
+    expect(errorOf('var a = -"s";')).toBe(
+      'Operand must be a number.\n[line 1]',
+    );
+  });
+});
+
+describe('interpret: assignment', () => {
+  it('changes a variable and gives back the assigned value', () => {
+    expect(outputOf('var a = 1; a = 2; print a;')).toEqual(['2']);
+    expect(outputOf('var a; print a = 3; print a;')).toEqual(['3', '3']);
+    expect(outputOf('var a = 1; a = a + 1; print a;')).toEqual(['2']);
+    expect(outputOf('var a = 1; a = nil; print a;')).toEqual(['nil']);
+    expect(outputOf('var a; var b; a = b = 4; print a; print b;')).toEqual([
+      '4',
+      '4',
+    ]);
+  });
+
+  it('does not create a variable and evaluates the value first', () => {
+    expect(errorOf('a = 1;')).toBe("Undefined variable 'a'.\n[line 1]");
+    expect(errorOf('var b;\n\nx = 1;')).toBe(
+      "Undefined variable 'x'.\n[line 3]",
+    );
+    expect(errorOf('constructor = 1;')).toBe(
+      "Undefined variable 'constructor'.\n[line 1]",
+    );
+    expect(errorOf('x = y;')).toBe("Undefined variable 'y'.\n[line 1]");
+    expect(errorOf('x = -"s";')).toBe('Operand must be a number.\n[line 1]');
+  });
+});
+
+describe('interpret: blocks', () => {
+  it('hides block variables from the outside', () => {
+    expect(outputOf('{ print 1; print 2; }')).toEqual(['1', '2']);
+    expect(outputOf('{} {{}}')).toEqual([]);
+    expect(outputOf('{ var a = 1; print a; }')).toEqual(['1']);
+    expect(errorOf('{ var a = 1; }\nprint a;')).toBe(
+      "Undefined variable 'a'.\n[line 2]",
+    );
+    expect(errorOf('{ { var a = 1; } print a; }')).toBe(
+      "Undefined variable 'a'.\n[line 1]",
+    );
+  });
+
+  it('allows an inner variable to shadow an outer one', () => {
+    expect(
+      outputOf(
+        'var a = "global";\n{ var a = "outer"; { var a = "inner"; print a; }\nprint a; }\nprint a;',
+      ),
+    ).toEqual(['inner', 'outer', 'global']);
+    expect(outputOf('var a = 1; { var a = a + 1; print a; } print a;')).toEqual(
+      ['2', '1'],
+    );
+  });
+
+  it('changes an outer variable from inside a block', () => {
+    expect(outputOf('var a = 1; { a = 2; } print a;')).toEqual(['2']);
+    expect(
+      outputOf('var a = 1; { { a = a + 1; } a = a * 10; } print a;'),
+    ).toEqual(['20']);
+    expect(outputOf('var a = 1; { var a = 5; a = 6; } print a;')).toEqual([
+      '1',
+    ]);
+  });
+
+  it('leaves the block scope after a runtime error', () => {
+    const lines: string[] = [];
+    const interpreter = new Interpreter((line) => lines.push(line));
+    const run = (source: string): RuntimeError | null =>
+      interpreter.interpret(parse(scan(source).tokens).statements);
+
+    expect(
+      run('var a = "outer"; { var a = "inner"; print -"x"; }')?.message,
+    ).toBe('Operand must be a number.');
+    expect(run('print a;')).toBeNull();
+    expect(lines).toEqual(['outer']);
+  });
+});
+
+describe('interpret: logical operators', () => {
+  it('returns an operand, not a boolean', () => {
+    expectPrinted([
+      ['nil or "yes"', 'yes'],
+      ['"a" or "b"', 'a'],
+      ['false and 1', 'false'],
+      ['1 and 2', '2'],
+      ['0 or 1', '0'],
+      ['"" and "ok"', 'ok'],
+      ['nil and 1 or 2', '2'],
+      ['1 == 1 and 2 < 3', 'true'],
+    ]);
+  });
+
+  it('skips the right operand when the left one decides', () => {
+    expect(outputOf('var a = 1; false and (a = 2); print a;')).toEqual(['1']);
+    expect(outputOf('var a = 1; true or (a = 2); print a;')).toEqual(['1']);
+    expect(outputOf('var a = 1; nil or (a = 2); print a;')).toEqual(['2']);
+    expect(outputOf('var a = 1; true and (a = 2); print a;')).toEqual(['2']);
+    expect(errorOf('true or -"x";')).toBeNull();
+    expect(errorOf('nil or -"x";')).toBe('Operand must be a number.\n[line 1]');
+    expect(errorOf('-"x" or y;')).toBe('Operand must be a number.\n[line 1]');
+  });
+});
+
+describe('interpret: if', () => {
+  it('picks one branch by truthiness', () => {
+    const cases: [string, string[]][] = [
+      ['if (true) print 1;', ['1']],
+      ['if (false) print 1;', []],
+      ['if (false) print 1; else print 2;', ['2']],
+      ['if (nil) print 1; else print 2;', ['2']],
+      ['if (0) print 1; else print 2;', ['1']],
+      ['if ("") print 1; else print 2;', ['1']],
+      ['var n = 0; if (n = n + 1) print n;', ['1']],
+    ];
+
+    for (const [source, lines] of cases) {
+      expect(outputOf(source), source).toEqual(lines);
+    }
+
+    const chain = (n: number): string =>
+      `var a = ${n}; if (a == 1) print "one"; else if (a == 2) print "two"; else print "many";`;
+
+    expect(outputOf(chain(1))).toEqual(['one']);
+    expect(outputOf(chain(2))).toEqual(['two']);
+    expect(outputOf(chain(3))).toEqual(['many']);
+    expect(outputOf('if (true) if (false) print 1; else print 2;')).toEqual([
+      '2',
+    ]);
+    expect(outputOf('if (false) if (true) print 1; else print 2;')).toEqual([]);
+    expect(errorOf('if (false) print y;')).toBeNull();
+    expect(errorOf('if (true) print 1; else print y;')).toBeNull();
+    expect(errorOf('if (true) print y;')).toBe(
+      "Undefined variable 'y'.\n[line 1]",
+    );
+    expect(errorOf('if (false) print 1; else print y;')).toBe(
+      "Undefined variable 'y'.\n[line 1]",
+    );
+    expect(errorOf('if (-"x") print 1;')).toBe(
+      'Operand must be a number.\n[line 1]',
+    );
+  });
+});
+
+describe('interpret: loops', () => {
+  it('repeats while the condition is true', () => {
+    expect(
+      outputOf('var i = 0; while (i < 3) { print i; i = i + 1; }'),
+    ).toEqual(['0', '1', '2']);
+    expect(outputOf('var i = 0; while (i < 3) i = i + 1; print i;')).toEqual([
+      '3',
+    ]);
+    expect(outputOf('var n = 0; while ((n = n + 1) < 3) print n;')).toEqual([
+      '1',
+      '2',
+    ]);
+    expect(outputOf('while (false) print 1;')).toEqual([]);
+    expect(outputOf('while (nil) print 1;')).toEqual([]);
+    expect(outputOf('var s = "go"; while (s) s = nil; print s;')).toEqual([
+      'nil',
+    ]);
+    expect(errorOf('while (true) -"x";')).toBe(
+      'Operand must be a number.\n[line 1]',
+    );
+  });
+
+  it('runs for with optional clauses and its own scope', () => {
+    expect(outputOf('for (var i = 0; i < 3; i = i + 1) print i;')).toEqual([
+      '0',
+      '1',
+      '2',
+    ]);
+    expect(outputOf('var i; for (i = 0; i < 2; i = i + 1) print i;')).toEqual([
+      '0',
+      '1',
+    ]);
+    expect(outputOf('var i = 0; for (; i < 2; i = i + 1) print i;')).toEqual([
+      '0',
+      '1',
+    ]);
+    expect(
+      outputOf('for (var i = 0; i < 2;) { print i; i = i + 1; }'),
+    ).toEqual(['0', '1']);
+    expect(outputOf('for (var i = 0; false; i = i + 1) print 1;')).toEqual([]);
+    expect(
+      outputOf('var n = 0; for (var i = 0; i < 4; i = i + 1) n = n + i; print n;'),
+    ).toEqual(['6']);
+    expect(errorOf('for (;;) -"x";')).toBe(
+      'Operand must be a number.\n[line 1]',
+    );
+    expect(errorOf('for (var i = 0; i < 1; i = i + 1) {} print i;')).toBe(
+      "Undefined variable 'i'.\n[line 1]",
+    );
+    expect(
+      outputOf(
+        'var i = "out"; for (var i = 0; i < 1; i = i + 1) print i; print i;',
+      ),
+    ).toEqual(['0', 'out']);
+  });
+});
+
 describe('interpret: runtime errors', () => {
   it('reports operands of the wrong type', () => {
     for (const source of ['-"s";', '-nil;']) {

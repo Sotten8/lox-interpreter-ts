@@ -42,6 +42,9 @@ class Parser {
 
   private declaration(): Stmt | null {
     try {
+      if (this.match('VAR')) {
+        return this.varDeclaration();
+      }
       return this.statement();
     } catch (error) {
       if (error instanceof ParseError) {
@@ -52,11 +55,97 @@ class Parser {
     }
   }
 
+  private varDeclaration(): Stmt {
+    const name = this.consume('IDENTIFIER', 'Expect variable name.');
+    const initializer = this.match('EQUAL') ? this.expression() : null;
+    this.consume('SEMICOLON', "Expect ';' after variable declaration.");
+    return { kind: 'var', name, initializer };
+  }
+
   private statement(): Stmt {
+    if (this.match('FOR')) {
+      return this.forStatement();
+    }
+    if (this.match('IF')) {
+      return this.ifStatement();
+    }
+    if (this.match('WHILE')) {
+      return this.whileStatement();
+    }
     if (this.match('PRINT')) {
       return this.printStatement();
     }
+    if (this.match('LEFT_BRACE')) {
+      return { kind: 'block', statements: this.block() };
+    }
     return this.expressionStatement();
+  }
+
+  private block(): Stmt[] {
+    const statements: Stmt[] = [];
+    while (!this.check('RIGHT_BRACE') && !this.isAtEnd()) {
+      const statement = this.declaration();
+      if (statement !== null) {
+        statements.push(statement);
+      }
+    }
+    this.consume('RIGHT_BRACE', "Expect '}' after block.");
+    return statements;
+  }
+
+  private ifStatement(): Stmt {
+    this.consume('LEFT_PAREN', "Expect '(' after 'if'.");
+    const condition = this.expression();
+    this.consume('RIGHT_PAREN', "Expect ')' after if condition.");
+    const thenBranch = this.statement();
+    const elseBranch = this.match('ELSE') ? this.statement() : null;
+    return { kind: 'if', condition, thenBranch, elseBranch };
+  }
+
+  private whileStatement(): Stmt {
+    this.consume('LEFT_PAREN', "Expect '(' after 'while'.");
+    const condition = this.expression();
+    this.consume('RIGHT_PAREN', "Expect ')' after condition.");
+    const body = this.statement();
+    return { kind: 'while', condition, body };
+  }
+
+  private forStatement(): Stmt {
+    this.consume('LEFT_PAREN', "Expect '(' after 'for'.");
+
+    let initializer: Stmt | null;
+    if (this.match('SEMICOLON')) {
+      initializer = null;
+    } else if (this.match('VAR')) {
+      initializer = this.varDeclaration();
+    } else {
+      initializer = this.expressionStatement();
+    }
+
+    let condition: Expr = { kind: 'literal', value: true };
+    if (!this.check('SEMICOLON')) {
+      condition = this.expression();
+    }
+    this.consume('SEMICOLON', "Expect ';' after loop condition.");
+
+    let increment: Expr | null = null;
+    if (!this.check('RIGHT_PAREN')) {
+      increment = this.expression();
+    }
+    this.consume('RIGHT_PAREN', "Expect ')' after for clauses.");
+
+    let body = this.statement();
+    if (increment !== null) {
+      body = {
+        kind: 'block',
+        statements: [body, { kind: 'expression', expression: increment }],
+      };
+    }
+    body = { kind: 'while', condition, body };
+    if (initializer !== null) {
+      body = { kind: 'block', statements: [initializer, body] };
+    }
+    return body;
   }
 
   private printStatement(): Stmt {
@@ -72,7 +161,28 @@ class Parser {
   }
 
   private expression(): Expr {
-    return this.equality();
+    return this.assignment();
+  }
+
+  private assignment(): Expr {
+    const expr = this.or();
+    if (this.match('EQUAL')) {
+      const equals = this.previous();
+      const value = this.assignment();
+      if (expr.kind === 'variable') {
+        return { kind: 'assign', name: expr.name, value };
+      }
+      this.error(equals, 'Invalid assignment target.');
+    }
+    return expr;
+  }
+
+  private or(): Expr {
+    return this.leftAssociative(() => this.and(), ['OR'], 'logical');
+  }
+
+  private and(): Expr {
+    return this.leftAssociative(() => this.equality(), ['AND'], 'logical');
   }
 
   private equality(): Expr {
@@ -100,12 +210,13 @@ class Parser {
   private leftAssociative(
     operand: () => Expr,
     operators: readonly TokenType[],
+    kind: 'binary' | 'logical' = 'binary',
   ): Expr {
     let expr = operand();
     while (this.match(...operators)) {
       const operator = this.previous();
       const right = operand();
-      expr = { kind: 'binary', left: expr, operator, right };
+      expr = { kind, left: expr, operator, right };
     }
     return expr;
   }
@@ -131,6 +242,9 @@ class Parser {
     }
     if (this.match('NUMBER', 'STRING')) {
       return { kind: 'literal', value: this.previous().literal };
+    }
+    if (this.match('IDENTIFIER')) {
+      return { kind: 'variable', name: this.previous() };
     }
     if (this.match('LEFT_PAREN')) {
       const expression = this.expression();

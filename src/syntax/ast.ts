@@ -25,7 +25,32 @@ export interface BinaryExpr {
   readonly right: Expr;
 }
 
-export type Expr = LiteralExpr | GroupingExpr | UnaryExpr | BinaryExpr;
+export interface LogicalExpr {
+  readonly kind: 'logical';
+  readonly left: Expr;
+  readonly operator: Token;
+  readonly right: Expr;
+}
+
+export interface VariableExpr {
+  readonly kind: 'variable';
+  readonly name: Token;
+}
+
+export interface AssignExpr {
+  readonly kind: 'assign';
+  readonly name: Token;
+  readonly value: Expr;
+}
+
+export type Expr =
+  | LiteralExpr
+  | GroupingExpr
+  | UnaryExpr
+  | BinaryExpr
+  | LogicalExpr
+  | VariableExpr
+  | AssignExpr;
 
 export interface ExpressionStmt {
   readonly kind: 'expression';
@@ -37,4 +62,34 @@ export interface PrintStmt {
   readonly expression: Expr;
 }
 
-export type Stmt = ExpressionStmt | PrintStmt;
+export interface VarStmt {
+  readonly kind: 'var';
+  readonly name: Token;
+  readonly initializer: Expr | null;
+}
+
+export interface BlockStmt {
+  readonly kind: 'block';
+  readonly statements: readonly Stmt[];
+}
+
+export interface IfStmt {
+  readonly kind: 'if';
+  readonly condition: Expr;
+  readonly thenBranch: Stmt;
+  readonly elseBranch: Stmt | null;
+}
+
+export interface WhileStmt {
+  readonly kind: 'while';
+  readonly condition: Expr;
+  readonly body: Stmt;
+}
+
+export type Stmt =
+  | ExpressionStmt
+  | PrintStmt
+  | VarStmt
+  | BlockStmt
+  | IfStmt
+  | WhileStmt;

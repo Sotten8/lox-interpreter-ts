@@ -58,7 +58,8 @@ export function findMismatches(
     );
   }
 
-  mismatches.push(...outputMismatches(expected.output, actual.output));
+  const actualLines = actual.output.flatMap((line) => line.split('\n'));
+  mismatches.push(...outputMismatches(expected.output, actualLines));
 
   const { runtimeError } = expected;
   const expectedErrors =
