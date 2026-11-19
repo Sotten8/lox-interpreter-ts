@@ -2,6 +2,7 @@ import type { Expr, UnaryExpr, BinaryExpr, Stmt } from '../syntax/ast';
 import type { Token, TokenType } from '../syntax/token';
 import { isEqual, isTruthy, stringify, type LoxValue } from './values';
 import { RuntimeError } from '../errors';
+import { assertNever } from '../assert-never';
 
 export type Output = (line: string) => void;
 
@@ -80,6 +81,8 @@ export class Interpreter {
       case 'print':
         this.output(stringify(this.evaluate(stmt.expression)));
         return;
+      default:
+        return assertNever(stmt);
     }
   }
 
