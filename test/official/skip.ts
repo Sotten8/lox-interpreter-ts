@@ -1,10 +1,6 @@
 export const SKIPPED: ReadonlyMap<string, string> = new Map([
   ['assignment/to_this.lox', 'needs classes (stage 4)'],
-  ['block/empty.lox', 'needs if (stage 2)'],
   ['for', 'needs control flow (stage 2)'],
-  ['if', 'needs control flow (stage 2)'],
-  ['logical_operator', 'needs logical operators (stage 2)'],
-  ['variable/unreached_undefined.lox', 'needs if (stage 2)'],
   [
     'variable/duplicate_local.lox',
     'needs blocks and the resolver (stages 2-3)',
