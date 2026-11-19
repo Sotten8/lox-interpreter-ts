@@ -274,6 +274,45 @@ describe('parse: loops', () => {
   });
 });
 
+describe('parse: calls', () => {
+  const callWith = (count: number): string =>
+    `f(${Array.from({ length: count }, () => '1').join(', ')});`;
+
+  it('parses calls with any number of arguments', () => {
+    expect(exprTree('f()')).toBe('(call f)');
+    expect(exprTree('f(1, 2 + 3)')).toBe('(call f 1 (+ 2 3))');
+    expect(exprTree('f(a = 1)')).toBe('(call f (= a 1))');
+    expect(exprTree('f(1)(2)(3)')).toBe('(call (call (call f 1) 2) 3)');
+    expect(exprTree('(f)(1)')).toBe('(call (group f) 1)');
+    expect(exprTree('-f() + g(1) * 2')).toBe(
+      '(+ (- (call f)) (* (call g 1) 2))',
+    );
+    expect(exprTree('a or f()')).toBe('(or a (call f))');
+  });
+
+  it('allows at most 255 arguments and keeps parsing', () => {
+    expect(errorsOf(callWith(255))).toEqual([]);
+    expect(errorsOf(callWith(256))).toEqual([
+      "[line 1] Error at '1': Can't have more than 255 arguments.",
+    ]);
+    expect(trees(callWith(256))).toHaveLength(1);
+  });
+
+  it('reports a broken call', () => {
+    const cases: [string, string][] = [
+      ['f(1;', "[line 1] Error at ';': Expect ')' after arguments."],
+      ['f(1 2);', "[line 1] Error at '2': Expect ')' after arguments."],
+      ['f(1,);', "[line 1] Error at ')': Expect expression."],
+      ['f(', '[line 1] Error at end: Expect expression.'],
+    ];
+
+    for (const [source, message] of cases) {
+      expect(errorsOf(source), source).toEqual([message]);
+    }
+    expect(trees('f(1; print 2;')).toEqual(['(print 2)']);
+  });
+});
+
 describe('parse: errors and recovery', () => {
   it.each([
     ['1 + ;', ["[line 1] Error at ';': Expect expression."]],

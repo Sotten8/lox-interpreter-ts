@@ -343,6 +343,28 @@ describe('interpret: loops', () => {
   });
 });
 
+describe('interpret: calls', () => {
+  it('rejects a value that is not callable', () => {
+    for (const source of ['true();', 'nil();', '123();', '"text"();']) {
+      expect(errorOf(source), source).toBe(
+        'Can only call functions and classes.\n[line 1]',
+      );
+    }
+    expect(errorOf('"a"(\n1,\n2\n);')).toBe(
+      'Can only call functions and classes.\n[line 4]',
+    );
+  });
+
+  it('evaluates the callee and the arguments before the call error', () => {
+    expect(errorOf('x(y);')).toBe("Undefined variable 'x'.\n[line 1]");
+    expect(errorOf('nil(y);')).toBe("Undefined variable 'y'.\n[line 1]");
+    expect(errorOf('nil(-"s");')).toBe('Operand must be a number.\n[line 1]');
+    expect(errorOf('nil(1, -"s", y);')).toBe(
+      'Operand must be a number.\n[line 1]',
+    );
+  });
+});
+
 describe('interpret: runtime errors', () => {
   it('reports operands of the wrong type', () => {
     for (const source of ['-"s";', '-nil;']) {
