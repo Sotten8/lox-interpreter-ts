@@ -1,6 +1,9 @@
 export const SKIPPED: ReadonlyMap<string, string> = new Map([
   ['assignment/to_this.lox', 'needs classes (stage 4)'],
-  ['for', 'needs control flow (stage 2)'],
+  ['for/closure_in_body.lox', 'needs functions and closures (stage 3)'],
+  ['for/return_closure.lox', 'needs functions and closures (stage 3)'],
+  ['for/return_inside.lox', 'needs functions (stage 3)'],
+  ['for/syntax.lox', 'needs functions (stage 3)'],
   [
     'variable/duplicate_local.lox',
     'needs blocks and the resolver (stages 2-3)',
@@ -22,7 +25,9 @@ export const SKIPPED: ReadonlyMap<string, string> = new Map([
     'needs functions, blocks and the resolver (stages 2-3)',
   ],
   ['variable/local_from_method.lox', 'needs classes (stage 4)'],
-  ['while', 'needs control flow (stage 2)'],
+  ['while/closure_in_body.lox', 'needs functions and closures (stage 3)'],
+  ['while/return_closure.lox', 'needs functions and closures (stage 3)'],
+  ['while/return_inside.lox', 'needs functions (stage 3)'],
   ['call', 'needs functions (stage 3)'],
   ['closure', 'needs functions and closures (stage 3)'],
   ['function', 'needs functions (stage 3)'],
