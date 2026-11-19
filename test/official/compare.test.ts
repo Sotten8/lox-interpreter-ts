@@ -33,6 +33,27 @@ describe('findMismatches: output and exit code', () => {
     expect(findMismatches(expectations(), result())).toEqual([]);
   });
 
+  it('compares the lines of a printed value that contains newlines', () => {
+    expect(
+      findMismatches(
+        expectations({ output: ['1', '2', '3', 'end'] }),
+        result({ output: ['1\n2\n3', 'end'] }),
+      ),
+    ).toEqual([]);
+    expect(
+      findMismatches(
+        expectations({ output: ['a', '', 'b'] }),
+        result({ output: ['a\n\nb'] }),
+      ),
+    ).toEqual([]);
+    expect(
+      findMismatches(
+        expectations({ output: ['1', '2'] }),
+        result({ output: ['1\n3'] }),
+      ),
+    ).toEqual(['Output differs at line 2: expected "2", got "3"']);
+  });
+
   it('reports every line where output differs', () => {
     expect(
       findMismatches(
