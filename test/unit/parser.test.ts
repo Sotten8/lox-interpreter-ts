@@ -263,10 +263,7 @@ describe('parse: loops', () => {
         'for (var i = 0; i < 3) 1;',
         "[line 1] Error at ')': Expect ';' after loop condition.",
       ],
-      [
-        'for (;; 1;',
-        "[line 1] Error at ';': Expect ')' after for clauses.",
-      ],
+      ['for (;; 1;', "[line 1] Error at ';': Expect ')' after for clauses."],
       ['for (;;) var b;', "[line 1] Error at 'var': Expect expression."],
     ];
 

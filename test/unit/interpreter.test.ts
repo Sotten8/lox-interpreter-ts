@@ -320,12 +320,14 @@ describe('interpret: loops', () => {
       '0',
       '1',
     ]);
-    expect(
-      outputOf('for (var i = 0; i < 2;) { print i; i = i + 1; }'),
-    ).toEqual(['0', '1']);
+    expect(outputOf('for (var i = 0; i < 2;) { print i; i = i + 1; }')).toEqual(
+      ['0', '1'],
+    );
     expect(outputOf('for (var i = 0; false; i = i + 1) print 1;')).toEqual([]);
     expect(
-      outputOf('var n = 0; for (var i = 0; i < 4; i = i + 1) n = n + i; print n;'),
+      outputOf(
+        'var n = 0; for (var i = 0; i < 4; i = i + 1) n = n + i; print n;',
+      ),
     ).toEqual(['6']);
     expect(errorOf('for (;;) -"x";')).toBe(
       'Operand must be a number.\n[line 1]',

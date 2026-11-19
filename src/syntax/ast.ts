@@ -87,9 +87,4 @@ export interface WhileStmt {
 }
 
 export type Stmt =
-  | ExpressionStmt
-  | PrintStmt
-  | VarStmt
-  | BlockStmt
-  | IfStmt
-  | WhileStmt;
+  ExpressionStmt | PrintStmt | VarStmt | BlockStmt | IfStmt | WhileStmt;
