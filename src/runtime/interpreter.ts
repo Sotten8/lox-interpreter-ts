@@ -55,7 +55,7 @@ function add(operator: Token, left: LoxValue, right: LoxValue): LoxValue {
 
 export class Interpreter {
   private readonly output: Output;
-  private readonly environment = new Environment();
+  private environment = new Environment();
 
   constructor(output: Output) {
     this.output = output;
@@ -89,8 +89,26 @@ export class Interpreter {
         this.environment.define(stmt.name.lexeme, value);
         return;
       }
+      case 'block':
+        this.executeBlock(stmt.statements, new Environment(this.environment));
+        return;
       default:
         return assertNever(stmt);
+    }
+  }
+
+  private executeBlock(
+    statements: readonly Stmt[],
+    environment: Environment,
+  ): void {
+    const previous = this.environment;
+    try {
+      this.environment = environment;
+      for (const statement of statements) {
+        this.execute(statement);
+      }
+    } finally {
+      this.environment = previous;
     }
   }
 
@@ -106,6 +124,11 @@ export class Interpreter {
         return this.evaluateBinary(expr);
       case 'variable':
         return this.environment.get(expr.name);
+      case 'assign': {
+        const value = this.evaluate(expr.value);
+        this.environment.assign(expr.name, value);
+        return value;
+      }
     }
   }
 

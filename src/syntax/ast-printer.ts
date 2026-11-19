@@ -22,6 +22,8 @@ export function printExpr(expr: Expr): string {
       return `(${expr.operator.lexeme} ${printExpr(expr.left)} ${printExpr(expr.right)})`;
     case 'variable':
       return expr.name.lexeme;
+    case 'assign':
+      return `(= ${expr.name.lexeme} ${printExpr(expr.value)})`;
   }
 }
 
@@ -35,5 +37,7 @@ export function printStmt(stmt: Stmt): string {
       return stmt.initializer === null
         ? `(var ${stmt.name.lexeme})`
         : `(var ${stmt.name.lexeme} ${printExpr(stmt.initializer)})`;
+    case 'block':
+      return `(${['block', ...stmt.statements.map(printStmt)].join(' ')})`;
   }
 }

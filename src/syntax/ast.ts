@@ -30,12 +30,19 @@ export interface VariableExpr {
   readonly name: Token;
 }
 
+export interface AssignExpr {
+  readonly kind: 'assign';
+  readonly name: Token;
+  readonly value: Expr;
+}
+
 export type Expr =
   | LiteralExpr
   | GroupingExpr
   | UnaryExpr
   | BinaryExpr
-  | VariableExpr;
+  | VariableExpr
+  | AssignExpr;
 
 export interface ExpressionStmt {
   readonly kind: 'expression';
@@ -53,4 +60,9 @@ export interface VarStmt {
   readonly initializer: Expr | null;
 }
 
-export type Stmt = ExpressionStmt | PrintStmt | VarStmt;
+export interface BlockStmt {
+  readonly kind: 'block';
+  readonly statements: readonly Stmt[];
+}
+
+export type Stmt = ExpressionStmt | PrintStmt | VarStmt | BlockStmt;

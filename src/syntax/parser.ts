@@ -66,7 +66,22 @@ class Parser {
     if (this.match('PRINT')) {
       return this.printStatement();
     }
+    if (this.match('LEFT_BRACE')) {
+      return { kind: 'block', statements: this.block() };
+    }
     return this.expressionStatement();
+  }
+
+  private block(): Stmt[] {
+    const statements: Stmt[] = [];
+    while (!this.check('RIGHT_BRACE') && !this.isAtEnd()) {
+      const statement = this.declaration();
+      if (statement !== null) {
+        statements.push(statement);
+      }
+    }
+    this.consume('RIGHT_BRACE', "Expect '}' after block.");
+    return statements;
   }
 
   private printStatement(): Stmt {
@@ -82,7 +97,20 @@ class Parser {
   }
 
   private expression(): Expr {
-    return this.equality();
+    return this.assignment();
+  }
+
+  private assignment(): Expr {
+    const expr = this.equality();
+    if (this.match('EQUAL')) {
+      const equals = this.previous();
+      const value = this.assignment();
+      if (expr.kind === 'variable') {
+        return { kind: 'assign', name: expr.name, value };
+      }
+      this.error(equals, 'Invalid assignment target.');
+    }
+    return expr;
   }
 
   private equality(): Expr {
