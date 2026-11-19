@@ -51,5 +51,7 @@ export function printStmt(stmt: Stmt): string {
       }
       return `(${parts.join(' ')})`;
     }
+    case 'while':
+      return `(while ${printExpr(stmt.condition)} ${printStmt(stmt.body)})`;
   }
 }

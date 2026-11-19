@@ -80,4 +80,16 @@ export interface IfStmt {
   readonly elseBranch: Stmt | null;
 }
 
-export type Stmt = ExpressionStmt | PrintStmt | VarStmt | BlockStmt | IfStmt;
+export interface WhileStmt {
+  readonly kind: 'while';
+  readonly condition: Expr;
+  readonly body: Stmt;
+}
+
+export type Stmt =
+  | ExpressionStmt
+  | PrintStmt
+  | VarStmt
+  | BlockStmt
+  | IfStmt
+  | WhileStmt;

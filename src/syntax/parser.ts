@@ -63,8 +63,14 @@ class Parser {
   }
 
   private statement(): Stmt {
+    if (this.match('FOR')) {
+      return this.forStatement();
+    }
     if (this.match('IF')) {
       return this.ifStatement();
+    }
+    if (this.match('WHILE')) {
+      return this.whileStatement();
     }
     if (this.match('PRINT')) {
       return this.printStatement();
@@ -94,6 +100,52 @@ class Parser {
     const thenBranch = this.statement();
     const elseBranch = this.match('ELSE') ? this.statement() : null;
     return { kind: 'if', condition, thenBranch, elseBranch };
+  }
+
+  private whileStatement(): Stmt {
+    this.consume('LEFT_PAREN', "Expect '(' after 'while'.");
+    const condition = this.expression();
+    this.consume('RIGHT_PAREN', "Expect ')' after condition.");
+    const body = this.statement();
+    return { kind: 'while', condition, body };
+  }
+
+  private forStatement(): Stmt {
+    this.consume('LEFT_PAREN', "Expect '(' after 'for'.");
+
+    let initializer: Stmt | null;
+    if (this.match('SEMICOLON')) {
+      initializer = null;
+    } else if (this.match('VAR')) {
+      initializer = this.varDeclaration();
+    } else {
+      initializer = this.expressionStatement();
+    }
+
+    let condition: Expr = { kind: 'literal', value: true };
+    if (!this.check('SEMICOLON')) {
+      condition = this.expression();
+    }
+    this.consume('SEMICOLON', "Expect ';' after loop condition.");
+
+    let increment: Expr | null = null;
+    if (!this.check('RIGHT_PAREN')) {
+      increment = this.expression();
+    }
+    this.consume('RIGHT_PAREN', "Expect ')' after for clauses.");
+
+    let body = this.statement();
+    if (increment !== null) {
+      body = {
+        kind: 'block',
+        statements: [body, { kind: 'expression', expression: increment }],
+      };
+    }
+    body = { kind: 'while', condition, body };
+    if (initializer !== null) {
+      body = { kind: 'block', statements: [initializer, body] };
+    }
+    return body;
   }
 
   private printStatement(): Stmt {

@@ -105,6 +105,11 @@ export class Interpreter {
           this.execute(stmt.elseBranch);
         }
         return;
+      case 'while':
+        while (isTruthy(this.evaluate(stmt.condition))) {
+          this.execute(stmt.body);
+        }
+        return;
       default:
         return assertNever(stmt);
     }
