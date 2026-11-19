@@ -186,4 +186,12 @@ describe('interpret: runtime errors', () => {
       "Unknown binary operator ','.",
     );
   });
+
+  it('rejects a statement of an unknown kind', () => {
+    const unknown = { kind: 'unknown' } as unknown as Stmt;
+
+    expect(() => new Interpreter(() => {}).interpret([unknown])).toThrow(
+      'Unexpected value: {"kind":"unknown"}',
+    );
+  });
 });
