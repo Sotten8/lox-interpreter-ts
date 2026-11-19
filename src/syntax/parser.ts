@@ -63,6 +63,9 @@ class Parser {
   }
 
   private statement(): Stmt {
+    if (this.match('IF')) {
+      return this.ifStatement();
+    }
     if (this.match('PRINT')) {
       return this.printStatement();
     }
@@ -84,6 +87,15 @@ class Parser {
     return statements;
   }
 
+  private ifStatement(): Stmt {
+    this.consume('LEFT_PAREN', "Expect '(' after 'if'.");
+    const condition = this.expression();
+    this.consume('RIGHT_PAREN', "Expect ')' after if condition.");
+    const thenBranch = this.statement();
+    const elseBranch = this.match('ELSE') ? this.statement() : null;
+    return { kind: 'if', condition, thenBranch, elseBranch };
+  }
+
   private printStatement(): Stmt {
     const expression = this.expression();
     this.consume('SEMICOLON', "Expect ';' after value.");
@@ -101,7 +113,7 @@ class Parser {
   }
 
   private assignment(): Expr {
-    const expr = this.equality();
+    const expr = this.or();
     if (this.match('EQUAL')) {
       const equals = this.previous();
       const value = this.assignment();
@@ -111,6 +123,14 @@ class Parser {
       this.error(equals, 'Invalid assignment target.');
     }
     return expr;
+  }
+
+  private or(): Expr {
+    return this.leftAssociative(() => this.and(), ['OR'], 'logical');
+  }
+
+  private and(): Expr {
+    return this.leftAssociative(() => this.equality(), ['AND'], 'logical');
   }
 
   private equality(): Expr {
@@ -138,12 +158,13 @@ class Parser {
   private leftAssociative(
     operand: () => Expr,
     operators: readonly TokenType[],
+    kind: 'binary' | 'logical' = 'binary',
   ): Expr {
     let expr = operand();
     while (this.match(...operators)) {
       const operator = this.previous();
       const right = operand();
-      expr = { kind: 'binary', left: expr, operator, right };
+      expr = { kind, left: expr, operator, right };
     }
     return expr;
   }

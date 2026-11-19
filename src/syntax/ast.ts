@@ -25,6 +25,13 @@ export interface BinaryExpr {
   readonly right: Expr;
 }
 
+export interface LogicalExpr {
+  readonly kind: 'logical';
+  readonly left: Expr;
+  readonly operator: Token;
+  readonly right: Expr;
+}
+
 export interface VariableExpr {
   readonly kind: 'variable';
   readonly name: Token;
@@ -41,6 +48,7 @@ export type Expr =
   | GroupingExpr
   | UnaryExpr
   | BinaryExpr
+  | LogicalExpr
   | VariableExpr
   | AssignExpr;
 
@@ -65,4 +73,11 @@ export interface BlockStmt {
   readonly statements: readonly Stmt[];
 }
 
-export type Stmt = ExpressionStmt | PrintStmt | VarStmt | BlockStmt;
+export interface IfStmt {
+  readonly kind: 'if';
+  readonly condition: Expr;
+  readonly thenBranch: Stmt;
+  readonly elseBranch: Stmt | null;
+}
+
+export type Stmt = ExpressionStmt | PrintStmt | VarStmt | BlockStmt | IfStmt;

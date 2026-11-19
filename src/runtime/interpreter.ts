@@ -1,4 +1,10 @@
-import type { Expr, UnaryExpr, BinaryExpr, Stmt } from '../syntax/ast';
+import type {
+  Expr,
+  UnaryExpr,
+  BinaryExpr,
+  LogicalExpr,
+  Stmt,
+} from '../syntax/ast';
 import type { Token, TokenType } from '../syntax/token';
 import { isEqual, isTruthy, stringify, type LoxValue } from './values';
 import { RuntimeError } from '../errors';
@@ -92,6 +98,13 @@ export class Interpreter {
       case 'block':
         this.executeBlock(stmt.statements, new Environment(this.environment));
         return;
+      case 'if':
+        if (isTruthy(this.evaluate(stmt.condition))) {
+          this.execute(stmt.thenBranch);
+        } else if (stmt.elseBranch !== null) {
+          this.execute(stmt.elseBranch);
+        }
+        return;
       default:
         return assertNever(stmt);
     }
@@ -122,6 +135,8 @@ export class Interpreter {
         return this.evaluateUnary(expr);
       case 'binary':
         return this.evaluateBinary(expr);
+      case 'logical':
+        return this.evaluateLogical(expr);
       case 'variable':
         return this.environment.get(expr.name);
       case 'assign': {
@@ -138,6 +153,13 @@ export class Interpreter {
       return -numberOperand(expr.operator, right);
     }
     return !isTruthy(right);
+  }
+
+  private evaluateLogical(expr: LogicalExpr): LoxValue {
+    const left = this.evaluate(expr.left);
+    const decided =
+      expr.operator.type === 'OR' ? isTruthy(left) : !isTruthy(left);
+    return decided ? left : this.evaluate(expr.right);
   }
 
   private evaluateBinary(expr: BinaryExpr): LoxValue {

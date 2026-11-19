@@ -19,6 +19,7 @@ export function printExpr(expr: Expr): string {
     case 'unary':
       return `(${expr.operator.lexeme} ${printExpr(expr.right)})`;
     case 'binary':
+    case 'logical':
       return `(${expr.operator.lexeme} ${printExpr(expr.left)} ${printExpr(expr.right)})`;
     case 'variable':
       return expr.name.lexeme;
@@ -39,5 +40,16 @@ export function printStmt(stmt: Stmt): string {
         : `(var ${stmt.name.lexeme} ${printExpr(stmt.initializer)})`;
     case 'block':
       return `(${['block', ...stmt.statements.map(printStmt)].join(' ')})`;
+    case 'if': {
+      const parts = [
+        'if',
+        printExpr(stmt.condition),
+        printStmt(stmt.thenBranch),
+      ];
+      if (stmt.elseBranch !== null) {
+        parts.push(printStmt(stmt.elseBranch));
+      }
+      return `(${parts.join(' ')})`;
+    }
   }
 }
