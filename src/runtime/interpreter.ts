@@ -3,6 +3,7 @@ import type { Token, TokenType } from '../syntax/token';
 import { isEqual, isTruthy, stringify, type LoxValue } from './values';
 import { RuntimeError } from '../errors';
 import { assertNever } from '../assert-never';
+import { Environment } from './environment';
 
 export type Output = (line: string) => void;
 
@@ -54,6 +55,7 @@ function add(operator: Token, left: LoxValue, right: LoxValue): LoxValue {
 
 export class Interpreter {
   private readonly output: Output;
+  private readonly environment = new Environment();
 
   constructor(output: Output) {
     this.output = output;
@@ -81,6 +83,12 @@ export class Interpreter {
       case 'print':
         this.output(stringify(this.evaluate(stmt.expression)));
         return;
+      case 'var': {
+        const value =
+          stmt.initializer === null ? null : this.evaluate(stmt.initializer);
+        this.environment.define(stmt.name.lexeme, value);
+        return;
+      }
       default:
         return assertNever(stmt);
     }
@@ -96,6 +104,8 @@ export class Interpreter {
         return this.evaluateUnary(expr);
       case 'binary':
         return this.evaluateBinary(expr);
+      case 'variable':
+        return this.environment.get(expr.name);
     }
   }
 

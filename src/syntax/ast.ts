@@ -25,7 +25,17 @@ export interface BinaryExpr {
   readonly right: Expr;
 }
 
-export type Expr = LiteralExpr | GroupingExpr | UnaryExpr | BinaryExpr;
+export interface VariableExpr {
+  readonly kind: 'variable';
+  readonly name: Token;
+}
+
+export type Expr =
+  | LiteralExpr
+  | GroupingExpr
+  | UnaryExpr
+  | BinaryExpr
+  | VariableExpr;
 
 export interface ExpressionStmt {
   readonly kind: 'expression';
@@ -37,4 +47,10 @@ export interface PrintStmt {
   readonly expression: Expr;
 }
 
-export type Stmt = ExpressionStmt | PrintStmt;
+export interface VarStmt {
+  readonly kind: 'var';
+  readonly name: Token;
+  readonly initializer: Expr | null;
+}
+
+export type Stmt = ExpressionStmt | PrintStmt | VarStmt;

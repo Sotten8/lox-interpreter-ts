@@ -42,6 +42,9 @@ class Parser {
 
   private declaration(): Stmt | null {
     try {
+      if (this.match('VAR')) {
+        return this.varDeclaration();
+      }
       return this.statement();
     } catch (error) {
       if (error instanceof ParseError) {
@@ -50,6 +53,13 @@ class Parser {
       }
       throw error;
     }
+  }
+
+  private varDeclaration(): Stmt {
+    const name = this.consume('IDENTIFIER', 'Expect variable name.');
+    const initializer = this.match('EQUAL') ? this.expression() : null;
+    this.consume('SEMICOLON', "Expect ';' after variable declaration.");
+    return { kind: 'var', name, initializer };
   }
 
   private statement(): Stmt {
@@ -131,6 +141,9 @@ class Parser {
     }
     if (this.match('NUMBER', 'STRING')) {
       return { kind: 'literal', value: this.previous().literal };
+    }
+    if (this.match('IDENTIFIER')) {
+      return { kind: 'variable', name: this.previous() };
     }
     if (this.match('LEFT_PAREN')) {
       const expression = this.expression();

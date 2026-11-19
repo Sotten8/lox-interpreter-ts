@@ -20,6 +20,8 @@ export function printExpr(expr: Expr): string {
       return `(${expr.operator.lexeme} ${printExpr(expr.right)})`;
     case 'binary':
       return `(${expr.operator.lexeme} ${printExpr(expr.left)} ${printExpr(expr.right)})`;
+    case 'variable':
+      return expr.name.lexeme;
   }
 }
 
@@ -29,5 +31,9 @@ export function printStmt(stmt: Stmt): string {
       return `(expr ${printExpr(stmt.expression)})`;
     case 'print':
       return `(print ${printExpr(stmt.expression)})`;
+    case 'var':
+      return stmt.initializer === null
+        ? `(var ${stmt.name.lexeme})`
+        : `(var ${stmt.name.lexeme} ${printExpr(stmt.initializer)})`;
   }
 }
