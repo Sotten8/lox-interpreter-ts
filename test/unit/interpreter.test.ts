@@ -284,6 +284,63 @@ describe('interpret: if', () => {
   });
 });
 
+describe('interpret: loops', () => {
+  it('repeats while the condition is true', () => {
+    expect(
+      outputOf('var i = 0; while (i < 3) { print i; i = i + 1; }'),
+    ).toEqual(['0', '1', '2']);
+    expect(outputOf('var i = 0; while (i < 3) i = i + 1; print i;')).toEqual([
+      '3',
+    ]);
+    expect(outputOf('var n = 0; while ((n = n + 1) < 3) print n;')).toEqual([
+      '1',
+      '2',
+    ]);
+    expect(outputOf('while (false) print 1;')).toEqual([]);
+    expect(outputOf('while (nil) print 1;')).toEqual([]);
+    expect(outputOf('var s = "go"; while (s) s = nil; print s;')).toEqual([
+      'nil',
+    ]);
+    expect(errorOf('while (true) -"x";')).toBe(
+      'Operand must be a number.\n[line 1]',
+    );
+  });
+
+  it('runs for with optional clauses and its own scope', () => {
+    expect(outputOf('for (var i = 0; i < 3; i = i + 1) print i;')).toEqual([
+      '0',
+      '1',
+      '2',
+    ]);
+    expect(outputOf('var i; for (i = 0; i < 2; i = i + 1) print i;')).toEqual([
+      '0',
+      '1',
+    ]);
+    expect(outputOf('var i = 0; for (; i < 2; i = i + 1) print i;')).toEqual([
+      '0',
+      '1',
+    ]);
+    expect(
+      outputOf('for (var i = 0; i < 2;) { print i; i = i + 1; }'),
+    ).toEqual(['0', '1']);
+    expect(outputOf('for (var i = 0; false; i = i + 1) print 1;')).toEqual([]);
+    expect(
+      outputOf('var n = 0; for (var i = 0; i < 4; i = i + 1) n = n + i; print n;'),
+    ).toEqual(['6']);
+    expect(errorOf('for (;;) -"x";')).toBe(
+      'Operand must be a number.\n[line 1]',
+    );
+    expect(errorOf('for (var i = 0; i < 1; i = i + 1) {} print i;')).toBe(
+      "Undefined variable 'i'.\n[line 1]",
+    );
+    expect(
+      outputOf(
+        'var i = "out"; for (var i = 0; i < 1; i = i + 1) print i; print i;',
+      ),
+    ).toEqual(['0', 'out']);
+  });
+});
+
 describe('interpret: runtime errors', () => {
   it('reports operands of the wrong type', () => {
     for (const source of ['-"s";', '-nil;']) {

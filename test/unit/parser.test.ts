@@ -231,6 +231,52 @@ describe('parse: if', () => {
   });
 });
 
+describe('parse: loops', () => {
+  it('parses while', () => {
+    expect(trees('while (a) 1;')).toEqual(['(while a (expr 1))']);
+    expect(trees('while (a) { 1; }')).toEqual(['(while a (block (expr 1)))']);
+    expect(trees('while (a = b) while (c) 1;')).toEqual([
+      '(while (= a b) (while c (expr 1)))',
+    ]);
+  });
+
+  it('turns for into while and blocks', () => {
+    expect(trees('for (var i = 0; i < 3; i = i + 1) print i;')).toEqual([
+      '(block (var i 0) (while (< i 3) (block (print i) (expr (= i (+ i 1))))))',
+    ]);
+    expect(trees('for (i = 0; a; ) 1;')).toEqual([
+      '(block (expr (= i 0)) (while a (expr 1)))',
+    ]);
+    expect(trees('for (; a; i = i + 1) 1;')).toEqual([
+      '(while a (block (expr 1) (expr (= i (+ i 1)))))',
+    ]);
+    expect(trees('for (;;) 1;')).toEqual(['(while true (expr 1))']);
+  });
+
+  it('reports a broken loop', () => {
+    const cases: [string, string][] = [
+      ['while a) 1;', "[line 1] Error at 'a': Expect '(' after 'while'."],
+      ['while (a 1;', "[line 1] Error at '1': Expect ')' after condition."],
+      ['while (a) var b;', "[line 1] Error at 'var': Expect expression."],
+      ['for a) 1;', "[line 1] Error at 'a': Expect '(' after 'for'."],
+      [
+        'for (var i = 0; i < 3) 1;',
+        "[line 1] Error at ')': Expect ';' after loop condition.",
+      ],
+      [
+        'for (;; 1;',
+        "[line 1] Error at ';': Expect ')' after for clauses.",
+      ],
+      ['for (;;) var b;', "[line 1] Error at 'var': Expect expression."],
+    ];
+
+    for (const [source, message] of cases) {
+      expect(errorsOf(source), source).toEqual([message]);
+    }
+    expect(trees('while (a 1; print 2;')).toEqual(['(print 2)']);
+  });
+});
+
 describe('parse: errors and recovery', () => {
   it.each([
     ['1 + ;', ["[line 1] Error at ';': Expect expression."]],
