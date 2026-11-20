@@ -33,6 +33,28 @@ describe('run', () => {
     expect(result.exitCode).toBe(65);
   });
 
+  it('limits the depth of calls', () => {
+    const recursion = (depth: number): string =>
+      `fun f(n) { if (n > 0) f(n - 1); } f(${depth});`;
+
+    expect(run(recursion(2), { maxCallDepth: 3 }).exitCode).toBe(0);
+    expect(run(recursion(3), { maxCallDepth: 3 })).toEqual({
+      output: [],
+      errors: ['Stack overflow.\n[line 1]'],
+      exitCode: 70,
+    });
+    expect(
+      run('fun f() { return 1; } for (var i = 0; i < 9; i = i + 1) f();', {
+        maxCallDepth: 2,
+      }).exitCode,
+    ).toBe(0);
+    expect(run('fun f() {\n  f();\n}\nf();')).toEqual({
+      output: [],
+      errors: ['Stack overflow.\n[line 2]'],
+      exitCode: 70,
+    });
+  });
+
   it('reports a runtime error, exits with 70 and keeps earlier output', () => {
     expect(run('print 1;\nprint -"a";')).toEqual({
       output: ['1'],

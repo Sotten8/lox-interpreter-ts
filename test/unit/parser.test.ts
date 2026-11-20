@@ -357,6 +357,32 @@ describe('parse: functions', () => {
   });
 });
 
+describe('parse: return', () => {
+  it('parses return with and without a value', () => {
+    expect(trees('return;')).toEqual(['(return)']);
+    expect(trees('return 1 + 2;')).toEqual(['(return (+ 1 2))']);
+    expect(trees('fun f() { return a = 1; }')).toEqual([
+      '(fun f () (return (= a 1)))',
+    ]);
+    expect(trees('if (a) return 1; else return;')).toEqual([
+      '(if a (return 1) (return))',
+    ]);
+  });
+
+  it('reports a broken return and keeps parsing', () => {
+    expect(errorsOf('return 1')).toEqual([
+      "[line 1] Error at end: Expect ';' after return value.",
+    ]);
+    expect(errorsOf('return 1 2;')).toEqual([
+      "[line 1] Error at '2': Expect ';' after return value.",
+    ]);
+    expect(errorsOf('return')).toEqual([
+      '[line 1] Error at end: Expect expression.',
+    ]);
+    expect(trees('return 1 2; print 3;')).toEqual(['(print 3)']);
+  });
+});
+
 describe('parse: errors and recovery', () => {
   it.each([
     ['1 + ;', ["[line 1] Error at ';': Expect expression."]],
@@ -404,7 +430,7 @@ describe('parse: errors and recovery', () => {
     const keywords = ['class', 'fun', 'var', 'for', 'if', 'while', 'return'];
 
     for (const keyword of keywords) {
-      expect(errorsOf(`1 + * 2\n${keyword} 3;`)).toHaveLength(2);
+      expect(errorsOf(`1 + * 2\n${keyword} 3 4;`), keyword).toHaveLength(2);
     }
   });
 

@@ -447,6 +447,64 @@ describe('interpret: functions', () => {
   });
 });
 
+describe('interpret: return', () => {
+  it('returns the value of the expression or nil from the innermost function', () => {
+    expect(outputOf('fun f() { return 1 + 2; } print f();')).toEqual(['3']);
+    expect(outputOf('fun f() { return; } print f();')).toEqual(['nil']);
+    expect(outputOf('fun f() { return "a"; print "b"; } print f();')).toEqual([
+      'a',
+    ]);
+    expect(errorOf('fun f() { return -"s"; } f();')).toBe(
+      'Operand must be a number.\n[line 1]',
+    );
+    expect(
+      outputOf(
+        'fun g() { return "g"; } fun f() { g(); return "f"; } print f(); print g();',
+      ),
+    ).toEqual(['f', 'g']);
+    expect(
+      outputOf(
+        'fun fib(n) { if (n < 2) return n; return fib(n - 1) + fib(n - 2); } print fib(10);',
+      ),
+    ).toEqual(['55']);
+  });
+
+  it('leaves nested blocks and loops and restores the scope', () => {
+    expect(
+      outputOf(
+        'fun f() { for (var i = 0; i < 10; i = i + 1) { if (i == 3) { return i; } } } print f();',
+      ),
+    ).toEqual(['3']);
+    expect(errorOf('fun f() { { var a = 1; return a; } } f(); print a;')).toBe(
+      "Undefined variable 'a'.\n[line 1]",
+    );
+  });
+
+  it('returns closures that keep their own variables', () => {
+    const counter =
+      'fun makeCounter() { var i = 0; fun count() { i = i + 1; print i; } return count; }';
+
+    expect(
+      outputOf(
+        `${counter} var a = makeCounter(); var b = makeCounter(); a(); a(); b();`,
+      ),
+    ).toEqual(['1', '2', '1']);
+  });
+});
+
+describe('interpret: call depth', () => {
+  it('counts calls correctly after a runtime error', () => {
+    const interpreter = new Interpreter(() => undefined, 3);
+    const interpret = (source: string): RuntimeError | null =>
+      interpreter.interpret(parse(scan(source).tokens).statements);
+
+    expect(
+      interpret('fun boom() { -"s"; } fun a() { boom(); } a();'),
+    ).not.toBeNull();
+    expect(interpret('fun g() {} fun f() { g(); } f();')).toBeNull();
+  });
+});
+
 describe('interpret: runtime errors', () => {
   it('reports operands of the wrong type', () => {
     for (const source of ['-"s";', '-nil;']) {
