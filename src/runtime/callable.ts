@@ -3,6 +3,14 @@ import { Environment } from './environment';
 import type { Interpreter } from './interpreter';
 import type { LoxValue } from './values';
 
+export class ReturnSignal {
+  readonly value: LoxValue;
+
+  constructor(value: LoxValue) {
+    this.value = value;
+  }
+}
+
 export abstract class LoxCallable {
   abstract get arity(): number;
   abstract call(interpreter: Interpreter, args: readonly LoxValue[]): LoxValue;
@@ -54,7 +62,14 @@ export class LoxFunction extends LoxCallable {
     this.declaration.params.forEach((param, index) => {
       environment.define(param.lexeme, args[index] as LoxValue);
     });
-    interpreter.executeBlock(this.declaration.body, environment);
+    try {
+      interpreter.executeBlock(this.declaration.body, environment);
+    } catch (error) {
+      if (error instanceof ReturnSignal) {
+        return error.value;
+      }
+      throw error;
+    }
     return null;
   }
 

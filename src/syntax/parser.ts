@@ -91,6 +91,9 @@ class Parser {
     if (this.match('PRINT')) {
       return this.printStatement();
     }
+    if (this.match('RETURN')) {
+      return this.returnStatement();
+    }
     if (this.match('LEFT_BRACE')) {
       return { kind: 'block', statements: this.block() };
     }
@@ -162,6 +165,13 @@ class Parser {
       body = { kind: 'block', statements: [initializer, body] };
     }
     return body;
+  }
+
+  private returnStatement(): Stmt {
+    const keyword = this.previous();
+    const value = this.check('SEMICOLON') ? null : this.expression();
+    this.consume('SEMICOLON', "Expect ';' after return value.");
+    return { kind: 'return', keyword, value };
   }
 
   private printStatement(): Stmt {

@@ -11,7 +11,12 @@ import { isEqual, isTruthy, stringify, type LoxValue } from './values';
 import { RuntimeError } from '../errors';
 import { assertNever } from '../assert-never';
 import { Environment } from './environment';
-import { LoxCallable, LoxFunction, NativeFunction } from './callable';
+import {
+  LoxCallable,
+  LoxFunction,
+  NativeFunction,
+  ReturnSignal,
+} from './callable';
 
 export type Output = (line: string) => void;
 
@@ -61,12 +66,17 @@ function add(operator: Token, left: LoxValue, right: LoxValue): LoxValue {
   );
 }
 
+export const DEFAULT_MAX_CALL_DEPTH = 200;
+
 export class Interpreter {
   private readonly output: Output;
+  private readonly maxCallDepth: number;
   private environment = new Environment();
+  private callDepth = 0;
 
-  constructor(output: Output) {
+  constructor(output: Output, maxCallDepth: number = DEFAULT_MAX_CALL_DEPTH) {
     this.output = output;
+    this.maxCallDepth = maxCallDepth;
     this.environment.define(
       'clock',
       new NativeFunction(0, () => Date.now() / 1000),
@@ -122,6 +132,10 @@ export class Interpreter {
           new LoxFunction(stmt, this.environment),
         );
         return;
+      case 'return':
+        throw new ReturnSignal(
+          stmt.value === null ? null : this.evaluate(stmt.value),
+        );
       default:
         return assertNever(stmt);
     }
@@ -178,7 +192,15 @@ export class Interpreter {
         `Expected ${callee.arity} arguments but got ${args.length}.`,
       );
     }
-    return callee.call(this, args);
+    if (this.callDepth >= this.maxCallDepth) {
+      throw new RuntimeError(expr.paren.line, 'Stack overflow.');
+    }
+    this.callDepth++;
+    try {
+      return callee.call(this, args);
+    } finally {
+      this.callDepth--;
+    }
   }
 
   private evaluateUnary(expr: UnaryExpr): LoxValue {

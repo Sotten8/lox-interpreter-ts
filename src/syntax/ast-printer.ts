@@ -55,6 +55,10 @@ export function printStmt(stmt: Stmt): string {
     }
     case 'while':
       return `(while ${printExpr(stmt.condition)} ${printStmt(stmt.body)})`;
+    case 'return':
+      return stmt.value === null
+        ? '(return)'
+        : `(return ${printExpr(stmt.value)})`;
     case 'function': {
       const params = `(${stmt.params.map((param) => param.lexeme).join(' ')})`;
       return `(${['fun', stmt.name.lexeme, params, ...stmt.body.map(printStmt)].join(' ')})`;

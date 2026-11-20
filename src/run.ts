@@ -11,7 +11,11 @@ export interface RunResult {
   readonly exitCode: ExitCode;
 }
 
-export function run(source: string): RunResult {
+export interface RunOptions {
+  readonly maxCallDepth?: number;
+}
+
+export function run(source: string, options: RunOptions = {}): RunResult {
   const scanned = scan(source);
   const parsed = parse(scanned.tokens);
   const compileErrors = [...scanned.errors, ...parsed.errors];
@@ -25,7 +29,10 @@ export function run(source: string): RunResult {
   }
 
   const output: string[] = [];
-  const interpreter = new Interpreter((line) => output.push(line));
+  const interpreter = new Interpreter(
+    (line) => output.push(line),
+    options.maxCallDepth,
+  );
   const error = interpreter.interpret(parsed.statements);
 
   const result: RunResult =

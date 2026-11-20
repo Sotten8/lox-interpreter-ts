@@ -101,6 +101,12 @@ export interface FunctionStmt {
   readonly body: readonly Stmt[];
 }
 
+export interface ReturnStmt {
+  readonly kind: 'return';
+  readonly keyword: Token;
+  readonly value: Expr | null;
+}
+
 export type Stmt =
   | ExpressionStmt
   | PrintStmt
@@ -108,4 +114,5 @@ export type Stmt =
   | BlockStmt
   | IfStmt
   | WhileStmt
-  | FunctionStmt;
+  | FunctionStmt
+  | ReturnStmt;
