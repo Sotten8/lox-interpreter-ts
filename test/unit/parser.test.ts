@@ -313,6 +313,50 @@ describe('parse: calls', () => {
   });
 });
 
+describe('parse: functions', () => {
+  const declarationWith = (count: number): string =>
+    `fun f(${Array.from({ length: count }, (_, index) => `a${index}`).join(', ')}) {}`;
+
+  it('parses function declarations', () => {
+    expect(trees('fun f() {}')).toEqual(['(fun f ())']);
+    expect(trees('fun add(a, b) { print a + b; }')).toEqual([
+      '(fun add (a b) (print (+ a b)))',
+    ]);
+    expect(trees('fun outer() { fun inner(x) {} }')).toEqual([
+      '(fun outer () (fun inner (x)))',
+    ]);
+    expect(trees('{ fun f() {} } fun g() {}')).toEqual([
+      '(block (fun f ()))',
+      '(fun g ())',
+    ]);
+  });
+
+  it('allows at most 255 parameters and keeps parsing', () => {
+    expect(errorsOf(declarationWith(255))).toEqual([]);
+    expect(errorsOf(declarationWith(256))).toEqual([
+      "[line 1] Error at 'a255': Can't have more than 255 parameters.",
+    ]);
+    expect(trees(declarationWith(256))).toHaveLength(1);
+  });
+
+  it('reports a broken declaration', () => {
+    const cases: [string, string][] = [
+      ['fun (a) {}', "[line 1] Error at '(': Expect function name."],
+      ['fun f {}', "[line 1] Error at '{': Expect '(' after function name."],
+      ['fun f(1) {}', "[line 1] Error at '1': Expect parameter name."],
+      ['fun f(a,) {}', "[line 1] Error at ')': Expect parameter name."],
+      ['fun f(a b) {}', "[line 1] Error at 'b': Expect ')' after parameters."],
+      ['fun f() 1;', "[line 1] Error at '1': Expect '{' before function body."],
+      ['fun f() { print 1;', "[line 1] Error at end: Expect '}' after block."],
+    ];
+
+    for (const [source, message] of cases) {
+      expect(errorsOf(source), source).toEqual([message]);
+    }
+    expect(trees('fun f(; print 2;')).toEqual(['(print 2)']);
+  });
+});
+
 describe('parse: errors and recovery', () => {
   it.each([
     ['1 + ;', ["[line 1] Error at ';': Expect expression."]],

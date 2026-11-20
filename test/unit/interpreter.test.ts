@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { formatRuntimeError, type RuntimeError } from '../../src/errors';
 import { Interpreter } from '../../src/runtime/interpreter';
 import { parse } from '../../src/syntax/parser';
@@ -361,6 +361,88 @@ describe('interpret: calls', () => {
     expect(errorOf('nil(-"s");')).toBe('Operand must be a number.\n[line 1]');
     expect(errorOf('nil(1, -"s", y);')).toBe(
       'Operand must be a number.\n[line 1]',
+    );
+    expect(errorOf('fun f(a) {} f(1, -"s");')).toBe(
+      'Operand must be a number.\n[line 1]',
+    );
+    expect(
+      outputOf(
+        'var i = 0; fun f(a, b) { print a; print b; } f(i = i + 1, i = i + 1);',
+      ),
+    ).toEqual(['1', '2']);
+  });
+});
+
+describe('interpret: functions', () => {
+  it('declares and calls functions', () => {
+    expect(outputOf('fun hello() { print "hi"; } hello(); hello();')).toEqual([
+      'hi',
+      'hi',
+    ]);
+    expect(
+      outputOf('fun add(a, b) { print a + b; } add(1, 2); add("x", "y");'),
+    ).toEqual(['3', 'xy']);
+    expect(outputOf('fun f() {} print f();')).toEqual(['nil']);
+    expect(errorOf('fun f() { print nope; } f();')).toBe(
+      "Undefined variable 'nope'.\n[line 1]",
+    );
+  });
+
+  it('runs every call in its own scope inside the declaration scope', () => {
+    expect(
+      outputOf(
+        'fun count(n) { if (n > 0) { print n; count(n - 1); print n; } } count(2);',
+      ),
+    ).toEqual(['2', '1', '1', '2']);
+    expect(
+      outputOf('var a = "global"; fun f(a) { print a; } f("param"); print a;'),
+    ).toEqual(['param', 'global']);
+    expect(errorOf('fun f(a) { var b = a; } f(1); print b;')).toBe(
+      "Undefined variable 'b'.\n[line 1]",
+    );
+    expect(
+      outputOf('fun outer(x) { fun inner() { print x; } inner(); } outer(7);'),
+    ).toEqual(['7']);
+    expect(
+      outputOf('var n = 0; fun inc() { n = n + 1; } inc(); inc(); print n;'),
+    ).toEqual(['2']);
+  });
+
+  it('treats functions as values', () => {
+    expect(outputOf('fun foo() {} print foo; print clock;')).toEqual([
+      '<fn foo>',
+      '<native fn>',
+    ]);
+    expect(
+      outputOf(
+        'fun f() { print "f"; } var g = f; g(); print f == g; print f == clock; print !f;',
+      ),
+    ).toEqual(['f', 'true', 'false', 'false']);
+  });
+
+  it('checks the number of arguments before running the body', () => {
+    expect(errorOf('fun f(a, b) {} f(1);')).toBe(
+      'Expected 2 arguments but got 1.\n[line 1]',
+    );
+    expect(errorOf('fun f(a, b) {} f(1, 2, 3, 4);')).toBe(
+      'Expected 2 arguments but got 4.\n[line 1]',
+    );
+    expect(errorOf('fun f(a) {}\nf(\n1,\n2\n);')).toBe(
+      'Expected 1 arguments but got 2.\n[line 5]',
+    );
+    expect(execute('fun f(a) { print "ran"; } f();').lines).toEqual([]);
+  });
+
+  it('provides clock in seconds', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(5500);
+      expect(outputOf('print clock();')).toEqual(['5.5']);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(errorOf('clock(1);')).toBe(
+      'Expected 0 arguments but got 1.\n[line 1]',
     );
   });
 });
