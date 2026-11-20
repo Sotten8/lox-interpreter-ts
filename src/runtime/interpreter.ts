@@ -11,6 +11,7 @@ import { isEqual, isTruthy, stringify, type LoxValue } from './values';
 import { RuntimeError } from '../errors';
 import { assertNever } from '../assert-never';
 import { Environment } from './environment';
+import { LoxCallable, LoxFunction, NativeFunction } from './callable';
 
 export type Output = (line: string) => void;
 
@@ -66,6 +67,10 @@ export class Interpreter {
 
   constructor(output: Output) {
     this.output = output;
+    this.environment.define(
+      'clock',
+      new NativeFunction(0, () => Date.now() / 1000),
+    );
   }
 
   interpret(statements: readonly Stmt[]): RuntimeError | null {
@@ -111,15 +116,18 @@ export class Interpreter {
           this.execute(stmt.body);
         }
         return;
+      case 'function':
+        this.environment.define(
+          stmt.name.lexeme,
+          new LoxFunction(stmt, this.environment),
+        );
+        return;
       default:
         return assertNever(stmt);
     }
   }
 
-  private executeBlock(
-    statements: readonly Stmt[],
-    environment: Environment,
-  ): void {
+  executeBlock(statements: readonly Stmt[], environment: Environment): void {
     const previous = this.environment;
     try {
       this.environment = environment;
@@ -156,14 +164,21 @@ export class Interpreter {
   }
 
   private evaluateCall(expr: CallExpr): LoxValue {
-    this.evaluate(expr.callee);
-    for (const argument of expr.args) {
-      this.evaluate(argument);
+    const callee = this.evaluate(expr.callee);
+    const args = expr.args.map((argument) => this.evaluate(argument));
+    if (!(callee instanceof LoxCallable)) {
+      throw new RuntimeError(
+        expr.paren.line,
+        'Can only call functions and classes.',
+      );
     }
-    throw new RuntimeError(
-      expr.paren.line,
-      'Can only call functions and classes.',
-    );
+    if (args.length !== callee.arity) {
+      throw new RuntimeError(
+        expr.paren.line,
+        `Expected ${callee.arity} arguments but got ${args.length}.`,
+      );
+    }
+    return callee.call(this, args);
   }
 
   private evaluateUnary(expr: UnaryExpr): LoxValue {

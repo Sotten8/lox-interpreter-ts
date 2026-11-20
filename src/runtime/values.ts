@@ -1,4 +1,6 @@
-export type LoxValue = number | string | boolean | null;
+import type { LoxCallable } from './callable';
+
+export type LoxValue = number | string | boolean | null | LoxCallable;
 
 export function isTruthy(value: LoxValue): boolean {
   return value !== null && value !== false;

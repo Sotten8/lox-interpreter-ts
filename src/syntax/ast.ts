@@ -94,5 +94,18 @@ export interface WhileStmt {
   readonly body: Stmt;
 }
 
+export interface FunctionStmt {
+  readonly kind: 'function';
+  readonly name: Token;
+  readonly params: readonly Token[];
+  readonly body: readonly Stmt[];
+}
+
 export type Stmt =
-  ExpressionStmt | PrintStmt | VarStmt | BlockStmt | IfStmt | WhileStmt;
+  | ExpressionStmt
+  | PrintStmt
+  | VarStmt
+  | BlockStmt
+  | IfStmt
+  | WhileStmt
+  | FunctionStmt;

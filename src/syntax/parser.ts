@@ -42,6 +42,9 @@ class Parser {
 
   private declaration(): Stmt | null {
     try {
+      if (this.match('FUN')) {
+        return this.functionDeclaration();
+      }
       if (this.match('VAR')) {
         return this.varDeclaration();
       }
@@ -53,6 +56,19 @@ class Parser {
       }
       throw error;
     }
+  }
+
+  private functionDeclaration(): Stmt {
+    const name = this.consume('IDENTIFIER', 'Expect function name.');
+    this.consume('LEFT_PAREN', "Expect '(' after function name.");
+    const params = this.commaSeparated(
+      () => this.consume('IDENTIFIER', 'Expect parameter name.'),
+      "Can't have more than 255 parameters.",
+    );
+    this.consume('RIGHT_PAREN', "Expect ')' after parameters.");
+    this.consume('LEFT_BRACE', "Expect '{' before function body.");
+    const body = this.block();
+    return { kind: 'function', name, params, body };
   }
 
   private varDeclaration(): Stmt {
@@ -239,17 +255,25 @@ class Parser {
   }
 
   private finishCall(callee: Expr): Expr {
-    const args: Expr[] = [];
-    if (!this.check('RIGHT_PAREN')) {
-      do {
-        if (args.length >= 255) {
-          this.error(this.peek(), "Can't have more than 255 arguments.");
-        }
-        args.push(this.expression());
-      } while (this.match('COMMA'));
-    }
+    const args = this.commaSeparated(
+      () => this.expression(),
+      "Can't have more than 255 arguments.",
+    );
     const paren = this.consume('RIGHT_PAREN', "Expect ')' after arguments.");
     return { kind: 'call', callee, paren, args };
+  }
+
+  private commaSeparated<T>(item: () => T, limitMessage: string): T[] {
+    const items: T[] = [];
+    if (!this.check('RIGHT_PAREN')) {
+      do {
+        if (items.length >= 255) {
+          this.error(this.peek(), limitMessage);
+        }
+        items.push(item());
+      } while (this.match('COMMA'));
+    }
+    return items;
   }
 
   private primary(): Expr {
