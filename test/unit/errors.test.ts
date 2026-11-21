@@ -1,9 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import {
   RuntimeError,
+  compileErrorAt,
   formatCompileError,
   formatRuntimeError,
 } from '../../src/errors';
+import type { Token, TokenType } from '../../src/syntax/token';
+
+const token = (type: TokenType, lexeme: string): Token => ({
+  type,
+  lexeme,
+  literal: null,
+  line: 2,
+  column: 5,
+});
+
+describe('compileErrorAt', () => {
+  it('names the lexeme of the token', () => {
+    expect(compileErrorAt(token('IDENTIFIER', 'abc'), 'Bad.')).toEqual({
+      line: 2,
+      column: 5,
+      where: "at 'abc'",
+      message: 'Bad.',
+    });
+  });
+
+  it('says "at end" for the end of the file', () => {
+    expect(compileErrorAt(token('EOF', ''), 'Bad.').where).toBe('at end');
+  });
+});
 
 describe('formatCompileError', () => {
   it('formats an error without a place', () => {

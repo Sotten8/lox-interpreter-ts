@@ -17,7 +17,7 @@ const execute = (source: string): Execution => {
   const { statements } = parse(scan(source).tokens);
   const error = new Interpreter((line) => lines.push(line)).interpret(
     statements,
-    resolve(statements),
+    resolve(statements).locals,
   );
   return { lines, error };
 };
@@ -192,7 +192,7 @@ describe('interpret: blocks', () => {
         'var a = "global";\n{ var a = "outer"; { var a = "inner"; print a; }\nprint a; }\nprint a;',
       ),
     ).toEqual(['inner', 'outer', 'global']);
-    expect(outputOf('var a = 1; { var a = a + 1; print a; } print a;')).toEqual(
+    expect(outputOf('var a = 1; { var b = a + 1; print b; } print a;')).toEqual(
       ['2', '1'],
     );
   });
@@ -212,7 +212,7 @@ describe('interpret: blocks', () => {
     const interpreter = new Interpreter((line) => lines.push(line));
     const run = (source: string): RuntimeError | null => {
       const { statements } = parse(scan(source).tokens);
-      return interpreter.interpret(statements, resolve(statements));
+      return interpreter.interpret(statements, resolve(statements).locals);
     };
 
     expect(
@@ -501,7 +501,7 @@ describe('interpret: call depth', () => {
     const interpreter = new Interpreter(() => undefined, 3);
     const interpret = (source: string): RuntimeError | null => {
       const { statements } = parse(scan(source).tokens);
-      return interpreter.interpret(statements, resolve(statements));
+      return interpreter.interpret(statements, resolve(statements).locals);
     };
 
     expect(

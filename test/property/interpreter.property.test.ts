@@ -43,7 +43,7 @@ const loxOutput = (expression: string): string[] => {
   const { statements } = parse(scan(`print ${expression};`).tokens);
   new Interpreter((line) => lines.push(line)).interpret(
     statements,
-    resolve(statements),
+    resolve(statements).locals,
   );
   return lines;
 };

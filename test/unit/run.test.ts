@@ -26,6 +26,34 @@ describe('run', () => {
     ]);
   });
 
+  it('reports a static error and exits with 65', () => {
+    expect(run('return 1;')).toEqual({
+      output: [],
+      errors: ["[line 1] Error at 'return': Can't return from top-level code."],
+      exitCode: 65,
+    });
+  });
+
+  it('does not run anything when there is a static error', () => {
+    const result = run('print 1;\nreturn 2;');
+
+    expect(result.output).toEqual([]);
+    expect(result.exitCode).toBe(65);
+  });
+
+  it('lists every static error', () => {
+    expect(run('{ var a; var a; }\nreturn 1;').errors).toEqual([
+      "[line 1] Error at 'a': Already a variable with this name in this scope.",
+      "[line 2] Error at 'return': Can't return from top-level code.",
+    ]);
+  });
+
+  it('reports only syntax errors when there are both kinds', () => {
+    expect(run('var = 1;\nreturn 2;').errors).toEqual([
+      "[line 1] Error at '=': Expect variable name.",
+    ]);
+  });
+
   it('does not run anything when there is a compile error', () => {
     const result = run('print 1;\nprint ;');
 
