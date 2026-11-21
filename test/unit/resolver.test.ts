@@ -281,6 +281,48 @@ describe('resolve: several errors', () => {
   });
 });
 
+describe('resolve: classes', () => {
+  it('ignores a global class', () => {
+    expect(depthsOf('class A {} A;')).toEqual([]);
+  });
+
+  it('declares a class in the current block', () => {
+    expect(depthsOf('{ class A {} A; }')).toEqual([['A', 0]]);
+  });
+
+  it('declares a class inside a function', () => {
+    expect(depthsOf('fun f() { class A {} return A; }')).toEqual([['A', 0]]);
+  });
+
+  it('adds one level for a function declared after a class in a block', () => {
+    expect(depthsOf('{ class A {} fun f() { A; } }')).toEqual([['A', 1]]);
+  });
+
+  it('reports a second class with the same name in a block', () => {
+    expect(errorsOf('{ class A {} class A {} }')).toEqual([
+      `[line 1] Error at 'A': ${DUPLICATE}`,
+    ]);
+  });
+
+  it('reports a class after a variable with the same name in a block', () => {
+    expect(errorsOf('{ var A; class A {} }')).toEqual([
+      `[line 1] Error at 'A': ${DUPLICATE}`,
+    ]);
+  });
+
+  it('allows reading a class right after its declaration', () => {
+    expect(errorsOf('{ class A {} A; }')).toEqual([]);
+  });
+
+  it.each([
+    ['in global scope', 'class A {} class A {}'],
+    ['in different blocks', '{ class A {} } { class A {} }'],
+    ['in global scope and in a block', 'class A {} { class A {} }'],
+  ])('allows the same class name %s', (_, source) => {
+    expect(errorsOf(source)).toEqual([]);
+  });
+});
+
 describe('resolve: invalid nodes', () => {
   it('rejects an unknown statement', () => {
     const unknown = { kind: 'unknown' } as unknown as Stmt;

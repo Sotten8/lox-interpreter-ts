@@ -511,6 +511,74 @@ describe('interpret: call depth', () => {
   });
 });
 
+describe('interpret: classes', () => {
+  it('prints a class by its name', () => {
+    expect(outputOf('class Foo {} print Foo;')).toEqual(['Foo']);
+  });
+
+  it('prints an instance as the name of its class and "instance"', () => {
+    expect(outputOf('class Foo {} print Foo();')).toEqual(['Foo instance']);
+  });
+
+  it('creates a new instance on every call', () => {
+    expect(outputOf('class Foo {} print Foo() == Foo();')).toEqual(['false']);
+  });
+
+  it('equals an instance to itself', () => {
+    expect(
+      outputOf('class Foo {} var a = Foo(); var b = a; print a == b;'),
+    ).toEqual(['true']);
+  });
+
+  it('does not equal a class to its instance', () => {
+    expect(outputOf('class Foo {} print Foo == Foo();')).toEqual(['false']);
+  });
+
+  it('stores a class in a variable', () => {
+    expect(outputOf('class Foo {} var F = Foo; print F;')).toEqual(['Foo']);
+  });
+
+  it('creates an instance through a variable that holds a class', () => {
+    expect(outputOf('class Foo {} var F = Foo; print F();')).toEqual([
+      'Foo instance',
+    ]);
+  });
+
+  it('passes a class to a function that creates an instance', () => {
+    expect(
+      outputOf('class Foo {} fun make(c) { return c(); } print make(Foo);'),
+    ).toEqual(['Foo instance']);
+  });
+
+  it('declares a class in a block', () => {
+    expect(outputOf('{ class Foo {} print Foo; }')).toEqual(['Foo']);
+  });
+
+  it('hides a class declared in a block outside of it', () => {
+    expect(errorOf('{ class Foo {} } print Foo;')).toBe(
+      "Undefined variable 'Foo'.\n[line 1]",
+    );
+  });
+
+  it('creates a different class on every call of the declaring function', () => {
+    expect(
+      outputOf('fun make() { class A {} return A; } print make() == make();'),
+    ).toEqual(['false']);
+  });
+
+  it('lets the second declaration replace a global class', () => {
+    expect(
+      outputOf('class A {} var first = A; class A {} print first == A;'),
+    ).toEqual(['false']);
+  });
+
+  it('rejects one argument for a class without init', () => {
+    expect(errorOf('class Foo {} Foo(1);')).toBe(
+      'Expected 0 arguments but got 1.\n[line 1]',
+    );
+  });
+});
+
 describe('interpret: binding of variables', () => {
   it('uses the variable declared above the function, not below', () => {
     expect(

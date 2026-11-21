@@ -383,6 +383,40 @@ describe('parse: return', () => {
   });
 });
 
+describe('parse: classes', () => {
+  it('parses an empty class declaration', () => {
+    expect(trees('class A {}')).toEqual(['(class A)']);
+  });
+
+  it('parses classes next to other statements', () => {
+    expect(trees('class A {} print 1; class B {}')).toEqual([
+      '(class A)',
+      '(print 1)',
+      '(class B)',
+    ]);
+  });
+
+  it('parses a class inside a block', () => {
+    expect(trees('{ class A {} }')).toEqual(['(block (class A))']);
+  });
+
+  it.each([
+    ['class {}', "[line 1] Error at '{': Expect class name."],
+    ['class 1 {}', "[line 1] Error at '1': Expect class name."],
+    ['class print {}', "[line 1] Error at 'print': Expect class name."],
+    ['class', '[line 1] Error at end: Expect class name.'],
+    ['class A', "[line 1] Error at end: Expect '{' before class body."],
+    ['class A 1', "[line 1] Error at '1': Expect '{' before class body."],
+    ['class A {', "[line 1] Error at end: Expect '}' after class body."],
+  ])('reports an error for %j', (source, message) => {
+    expect(errorsOf(source)).toEqual([message]);
+  });
+
+  it('skips a broken declaration and parses the next statement', () => {
+    expect(trees('class {} print 2;')).toEqual(['(print 2)']);
+  });
+});
+
 describe('parse: errors and recovery', () => {
   it.each([
     ['1 + ;', ["[line 1] Error at ';': Expect expression."]],
