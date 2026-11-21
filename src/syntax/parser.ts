@@ -1,5 +1,5 @@
 import type { Expr, Stmt } from './ast';
-import type { CompileError } from '../errors';
+import { compileErrorAt, type CompileError } from '../errors';
 import type { Token, TokenType } from './token';
 
 export interface ParseResult {
@@ -351,13 +351,7 @@ class Parser {
   }
 
   private error(token: Token, message: string): ParseError {
-    const where = token.type === 'EOF' ? 'at end' : `at '${token.lexeme}'`;
-    this.errors.push({
-      line: token.line,
-      column: token.column,
-      where,
-      message,
-    });
+    this.errors.push(compileErrorAt(token, message));
     return new ParseError(message);
   }
 
