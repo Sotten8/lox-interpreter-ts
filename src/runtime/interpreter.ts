@@ -1,11 +1,14 @@
 import type {
+  AssignExpr,
   Expr,
   UnaryExpr,
   BinaryExpr,
   CallExpr,
   LogicalExpr,
   Stmt,
+  VariableExpr,
 } from '../syntax/ast';
+import type { Locals } from '../resolver/resolver';
 import type { Token, TokenType } from '../syntax/token';
 import { isEqual, isTruthy, stringify, type LoxValue } from './values';
 import { RuntimeError } from '../errors';
@@ -71,19 +74,22 @@ export const DEFAULT_MAX_CALL_DEPTH = 200;
 export class Interpreter {
   private readonly output: Output;
   private readonly maxCallDepth: number;
-  private environment = new Environment();
+  private readonly globals = new Environment();
+  private environment = this.globals;
+  private locals: Locals = new Map();
   private callDepth = 0;
 
   constructor(output: Output, maxCallDepth: number = DEFAULT_MAX_CALL_DEPTH) {
     this.output = output;
     this.maxCallDepth = maxCallDepth;
-    this.environment.define(
+    this.globals.define(
       'clock',
       new NativeFunction(0, () => Date.now() / 1000),
     );
   }
 
-  interpret(statements: readonly Stmt[]): RuntimeError | null {
+  interpret(statements: readonly Stmt[], locals: Locals): RuntimeError | null {
+    this.locals = locals;
     try {
       for (const statement of statements) {
         this.execute(statement);
@@ -166,15 +172,31 @@ export class Interpreter {
       case 'logical':
         return this.evaluateLogical(expr);
       case 'variable':
-        return this.environment.get(expr.name);
-      case 'assign': {
-        const value = this.evaluate(expr.value);
-        this.environment.assign(expr.name, value);
-        return value;
-      }
+        return this.lookUpVariable(expr);
+      case 'assign':
+        return this.evaluateAssign(expr);
       case 'call':
         return this.evaluateCall(expr);
     }
+  }
+
+  private lookUpVariable(expr: VariableExpr): LoxValue {
+    const distance = this.locals.get(expr);
+    if (distance === undefined) {
+      return this.globals.get(expr.name);
+    }
+    return this.environment.getAt(distance, expr.name.lexeme);
+  }
+
+  private evaluateAssign(expr: AssignExpr): LoxValue {
+    const value = this.evaluate(expr.value);
+    const distance = this.locals.get(expr);
+    if (distance === undefined) {
+      this.globals.assign(expr.name, value);
+    } else {
+      this.environment.assignAt(distance, expr.name.lexeme, value);
+    }
+    return value;
   }
 
   private evaluateCall(expr: CallExpr): LoxValue {

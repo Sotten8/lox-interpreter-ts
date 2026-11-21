@@ -1,4 +1,5 @@
 import { formatCompileError, formatRuntimeError } from './errors';
+import { resolve } from './resolver/resolver';
 import { Interpreter } from './runtime/interpreter';
 import { parse } from './syntax/parser';
 import { scan } from './syntax/scanner';
@@ -33,7 +34,10 @@ export function run(source: string, options: RunOptions = {}): RunResult {
     (line) => output.push(line),
     options.maxCallDepth,
   );
-  const error = interpreter.interpret(parsed.statements);
+  const error = interpreter.interpret(
+    parsed.statements,
+    resolve(parsed.statements),
+  );
 
   const result: RunResult =
     error !== null

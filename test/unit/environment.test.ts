@@ -127,3 +127,88 @@ describe('environment: nested scopes', () => {
     );
   });
 });
+
+describe('environment: access by distance', () => {
+  const chain = (): [Environment, Environment, Environment] => {
+    const outer = new Environment();
+    const middle = new Environment(outer);
+    const inner = new Environment(middle);
+    outer.define('a', 'outer');
+    middle.define('a', 'middle');
+    inner.define('a', 'inner');
+    return [outer, middle, inner];
+  };
+
+  it('reads at distance 0, 1 and 2', () => {
+    const [, , inner] = chain();
+
+    expect(inner.getAt(0, 'a')).toBe('inner');
+    expect(inner.getAt(1, 'a')).toBe('middle');
+    expect(inner.getAt(2, 'a')).toBe('outer');
+  });
+
+  it('reads nil and false', () => {
+    const environment = new Environment();
+    environment.define('n', null);
+    environment.define('f', false);
+
+    expect(environment.getAt(0, 'n')).toBeNull();
+    expect(environment.getAt(0, 'f')).toBe(false);
+  });
+
+  it('assigns only at the given distance', () => {
+    const [outer, middle, inner] = chain();
+
+    inner.assignAt(1, 'a', 'changed');
+
+    expect(middle.getAt(0, 'a')).toBe('changed');
+    expect(inner.getAt(0, 'a')).toBe('inner');
+    expect(outer.getAt(0, 'a')).toBe('outer');
+  });
+
+  it('assigns at distance 0', () => {
+    const [, middle, inner] = chain();
+
+    inner.assignAt(0, 'a', 'changed');
+
+    expect(inner.getAt(0, 'a')).toBe('changed');
+    expect(middle.getAt(0, 'a')).toBe('middle');
+  });
+
+  it('does not look outside when reading a missing name', () => {
+    const outer = new Environment();
+    outer.define('a', 1);
+    const inner = new Environment(outer);
+
+    expect(() => inner.getAt(0, 'a')).toThrow(
+      "Resolver bug: 'a' is not at distance 0.",
+    );
+  });
+
+  it('does not look outside when assigning a missing name', () => {
+    const outer = new Environment();
+    outer.define('a', 1);
+    const inner = new Environment(outer);
+
+    expect(() => inner.assignAt(0, 'a', 2)).toThrow(
+      "Resolver bug: 'a' is not at distance 0.",
+    );
+    expect(outer.getAt(0, 'a')).toBe(1);
+  });
+
+  it('fails when reading too far out', () => {
+    const [, , inner] = chain();
+
+    expect(() => inner.getAt(3, 'a')).toThrow(
+      'Resolver bug: no scope at distance 3.',
+    );
+  });
+
+  it('fails when assigning too far out', () => {
+    const [, , inner] = chain();
+
+    expect(() => inner.assignAt(3, 'a', 1)).toThrow(
+      'Resolver bug: no scope at distance 3.',
+    );
+  });
+});

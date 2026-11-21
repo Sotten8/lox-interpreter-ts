@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { formatRuntimeError, type RuntimeError } from '../../src/errors';
+import { resolve } from '../../src/resolver/resolver';
 import { Interpreter } from '../../src/runtime/interpreter';
 import { parse } from '../../src/syntax/parser';
 import { scan } from '../../src/syntax/scanner';
@@ -16,6 +17,7 @@ const execute = (source: string): Execution => {
   const { statements } = parse(scan(source).tokens);
   const error = new Interpreter((line) => lines.push(line)).interpret(
     statements,
+    resolve(statements),
   );
   return { lines, error };
 };
@@ -208,8 +210,10 @@ describe('interpret: blocks', () => {
   it('leaves the block scope after a runtime error', () => {
     const lines: string[] = [];
     const interpreter = new Interpreter((line) => lines.push(line));
-    const run = (source: string): RuntimeError | null =>
-      interpreter.interpret(parse(scan(source).tokens).statements);
+    const run = (source: string): RuntimeError | null => {
+      const { statements } = parse(scan(source).tokens);
+      return interpreter.interpret(statements, resolve(statements));
+    };
 
     expect(
       run('var a = "outer"; { var a = "inner"; print -"x"; }')?.message,
@@ -495,13 +499,65 @@ describe('interpret: return', () => {
 describe('interpret: call depth', () => {
   it('counts calls correctly after a runtime error', () => {
     const interpreter = new Interpreter(() => undefined, 3);
-    const interpret = (source: string): RuntimeError | null =>
-      interpreter.interpret(parse(scan(source).tokens).statements);
+    const interpret = (source: string): RuntimeError | null => {
+      const { statements } = parse(scan(source).tokens);
+      return interpreter.interpret(statements, resolve(statements));
+    };
 
     expect(
       interpret('fun boom() { -"s"; } fun a() { boom(); } a();'),
     ).not.toBeNull();
     expect(interpret('fun g() {} fun f() { g(); } f();')).toBeNull();
+  });
+});
+
+describe('interpret: binding of variables', () => {
+  it('uses the variable declared above the function, not below', () => {
+    expect(
+      outputOf(
+        'var a = "global"; { fun showA() { print a; } showA(); var a = "block"; showA(); }',
+      ),
+    ).toEqual(['global', 'global']);
+  });
+
+  it('assigns to the global, not to a local declared below', () => {
+    expect(
+      outputOf(
+        'var a = "global"; { fun assign() { a = "assigned"; } var a = "inner"; assign(); print a; } print a;',
+      ),
+    ).toEqual(['inner', 'assigned']);
+  });
+
+  it('does not see a local function declared below', () => {
+    expect(
+      errorOf(
+        '{ fun isEven(n) { if (n == 0) return true; return isOdd(n - 1); } fun isOdd(n) { return isEven(n - 1); } isEven(2); }',
+      ),
+    ).toBe("Undefined variable 'isOdd'.\n[line 1]");
+  });
+
+  it('finds a global declared below the function', () => {
+    expect(outputOf('fun f() { print late; } var late = "ok"; f();')).toEqual([
+      'ok',
+    ]);
+  });
+
+  it('reads a local without a value as nil', () => {
+    expect(outputOf('{ var a; print a; }')).toEqual(['nil']);
+  });
+
+  it('hides a global with a parameter of the same name', () => {
+    expect(
+      outputOf('var a = 1; fun f(a) { a = 2; print a; } f(0); print a;'),
+    ).toEqual(['2', '1']);
+  });
+
+  it('reports an unknown variable read in a block', () => {
+    expect(errorOf('{ print x; }')).toBe("Undefined variable 'x'.\n[line 1]");
+  });
+
+  it('reports an unknown variable assigned in a block', () => {
+    expect(errorOf('{ x = 1; }')).toBe("Undefined variable 'x'.\n[line 1]");
   });
 });
 
@@ -577,16 +633,16 @@ describe('interpret: runtime errors', () => {
       },
     };
 
-    expect(() => new Interpreter(() => {}).interpret([statement])).toThrow(
-      "Unknown binary operator ','.",
-    );
+    expect(() =>
+      new Interpreter(() => {}).interpret([statement], new Map()),
+    ).toThrow("Unknown binary operator ','.");
   });
 
   it('rejects a statement of an unknown kind', () => {
     const unknown = { kind: 'unknown' } as unknown as Stmt;
 
-    expect(() => new Interpreter(() => {}).interpret([unknown])).toThrow(
-      'Unexpected value: {"kind":"unknown"}',
-    );
+    expect(() =>
+      new Interpreter(() => {}).interpret([unknown], new Map()),
+    ).toThrow('Unexpected value: {"kind":"unknown"}');
   });
 });
