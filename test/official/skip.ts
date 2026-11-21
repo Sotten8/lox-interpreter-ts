@@ -1,25 +1,8 @@
 export const SKIPPED: ReadonlyMap<string, string> = new Map([
   ['assignment/to_this.lox', 'needs classes (stage 4)'],
-  [
-    'variable/duplicate_local.lox',
-    'needs blocks and the resolver (stages 2-3)',
-  ],
-  [
-    'variable/use_local_in_initializer.lox',
-    'needs blocks and the resolver (stages 2-3)',
-  ],
-  [
-    'variable/collide_with_parameter.lox',
-    'needs functions and the resolver (stage 3)',
-  ],
-  [
-    'variable/duplicate_parameter.lox',
-    'needs functions and the resolver (stage 3)',
-  ],
   ['variable/local_from_method.lox', 'needs classes (stage 4)'],
   ['call/object.lox', 'needs classes (stage 4)'],
   ['closure/close_over_method_parameter.lox', 'needs classes (stage 4)'],
-  ['return/at_top_level.lox', 'needs the resolver (stage 3)'],
   ['return/in_method.lox', 'needs classes (stage 4)'],
   ['regression/394.lox', 'needs classes (stage 4)'],
   ['benchmark', 'benchmarks print timings and are not tests'],
