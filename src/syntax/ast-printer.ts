@@ -25,6 +25,8 @@ export function printExpr(expr: Expr): string {
       return expr.name.lexeme;
     case 'assign':
       return `(= ${expr.name.lexeme} ${printExpr(expr.value)})`;
+    case 'call':
+      return `(${['call', printExpr(expr.callee), ...expr.args.map(printExpr)].join(' ')})`;
   }
 }
 
@@ -53,5 +55,13 @@ export function printStmt(stmt: Stmt): string {
     }
     case 'while':
       return `(while ${printExpr(stmt.condition)} ${printStmt(stmt.body)})`;
+    case 'return':
+      return stmt.value === null
+        ? '(return)'
+        : `(return ${printExpr(stmt.value)})`;
+    case 'function': {
+      const params = `(${stmt.params.map((param) => param.lexeme).join(' ')})`;
+      return `(${['fun', stmt.name.lexeme, params, ...stmt.body.map(printStmt)].join(' ')})`;
+    }
   }
 }

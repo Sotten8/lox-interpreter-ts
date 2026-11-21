@@ -1,5 +1,6 @@
 import fc from 'fast-check';
 import { describe, it } from 'vitest';
+import { resolve } from '../../src/resolver/resolver';
 import { Interpreter } from '../../src/runtime/interpreter';
 import { stringify } from '../../src/runtime/values';
 import { parse } from '../../src/syntax/parser';
@@ -40,7 +41,10 @@ const flat = fc
 const loxOutput = (expression: string): string[] => {
   const lines: string[] = [];
   const { statements } = parse(scan(`print ${expression};`).tokens);
-  new Interpreter((line) => lines.push(line)).interpret(statements);
+  new Interpreter((line) => lines.push(line)).interpret(
+    statements,
+    resolve(statements).locals,
+  );
   return lines;
 };
 

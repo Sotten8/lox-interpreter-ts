@@ -1,5 +1,5 @@
 import type { Expr, Stmt } from './ast';
-import type { CompileError } from '../errors';
+import { compileErrorAt, type CompileError } from '../errors';
 import type { Token, TokenType } from './token';
 
 export interface ParseResult {
@@ -42,6 +42,9 @@ class Parser {
 
   private declaration(): Stmt | null {
     try {
+      if (this.match('FUN')) {
+        return this.functionDeclaration();
+      }
       if (this.match('VAR')) {
         return this.varDeclaration();
       }
@@ -53,6 +56,19 @@ class Parser {
       }
       throw error;
     }
+  }
+
+  private functionDeclaration(): Stmt {
+    const name = this.consume('IDENTIFIER', 'Expect function name.');
+    this.consume('LEFT_PAREN', "Expect '(' after function name.");
+    const params = this.commaSeparated(
+      () => this.consume('IDENTIFIER', 'Expect parameter name.'),
+      "Can't have more than 255 parameters.",
+    );
+    this.consume('RIGHT_PAREN', "Expect ')' after parameters.");
+    this.consume('LEFT_BRACE', "Expect '{' before function body.");
+    const body = this.block();
+    return { kind: 'function', name, params, body };
   }
 
   private varDeclaration(): Stmt {
@@ -74,6 +90,9 @@ class Parser {
     }
     if (this.match('PRINT')) {
       return this.printStatement();
+    }
+    if (this.match('RETURN')) {
+      return this.returnStatement();
     }
     if (this.match('LEFT_BRACE')) {
       return { kind: 'block', statements: this.block() };
@@ -146,6 +165,13 @@ class Parser {
       body = { kind: 'block', statements: [initializer, body] };
     }
     return body;
+  }
+
+  private returnStatement(): Stmt {
+    const keyword = this.previous();
+    const value = this.check('SEMICOLON') ? null : this.expression();
+    this.consume('SEMICOLON', "Expect ';' after return value.");
+    return { kind: 'return', keyword, value };
   }
 
   private printStatement(): Stmt {
@@ -227,7 +253,37 @@ class Parser {
       const right = this.unary();
       return { kind: 'unary', operator, right };
     }
-    return this.primary();
+    return this.call();
+  }
+
+  private call(): Expr {
+    let expr = this.primary();
+    while (this.match('LEFT_PAREN')) {
+      expr = this.finishCall(expr);
+    }
+    return expr;
+  }
+
+  private finishCall(callee: Expr): Expr {
+    const args = this.commaSeparated(
+      () => this.expression(),
+      "Can't have more than 255 arguments.",
+    );
+    const paren = this.consume('RIGHT_PAREN', "Expect ')' after arguments.");
+    return { kind: 'call', callee, paren, args };
+  }
+
+  private commaSeparated<T>(item: () => T, limitMessage: string): T[] {
+    const items: T[] = [];
+    if (!this.check('RIGHT_PAREN')) {
+      do {
+        if (items.length >= 255) {
+          this.error(this.peek(), limitMessage);
+        }
+        items.push(item());
+      } while (this.match('COMMA'));
+    }
+    return items;
   }
 
   private primary(): Expr {
@@ -295,13 +351,7 @@ class Parser {
   }
 
   private error(token: Token, message: string): ParseError {
-    const where = token.type === 'EOF' ? 'at end' : `at '${token.lexeme}'`;
-    this.errors.push({
-      line: token.line,
-      column: token.column,
-      where,
-      message,
-    });
+    this.errors.push(compileErrorAt(token, message));
     return new ParseError(message);
   }
 

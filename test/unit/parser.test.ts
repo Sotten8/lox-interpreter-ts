@@ -263,10 +263,7 @@ describe('parse: loops', () => {
         'for (var i = 0; i < 3) 1;',
         "[line 1] Error at ')': Expect ';' after loop condition.",
       ],
-      [
-        'for (;; 1;',
-        "[line 1] Error at ';': Expect ')' after for clauses.",
-      ],
+      ['for (;; 1;', "[line 1] Error at ';': Expect ')' after for clauses."],
       ['for (;;) var b;', "[line 1] Error at 'var': Expect expression."],
     ];
 
@@ -274,6 +271,115 @@ describe('parse: loops', () => {
       expect(errorsOf(source), source).toEqual([message]);
     }
     expect(trees('while (a 1; print 2;')).toEqual(['(print 2)']);
+  });
+});
+
+describe('parse: calls', () => {
+  const callWith = (count: number): string =>
+    `f(${Array.from({ length: count }, () => '1').join(', ')});`;
+
+  it('parses calls with any number of arguments', () => {
+    expect(exprTree('f()')).toBe('(call f)');
+    expect(exprTree('f(1, 2 + 3)')).toBe('(call f 1 (+ 2 3))');
+    expect(exprTree('f(a = 1)')).toBe('(call f (= a 1))');
+    expect(exprTree('f(1)(2)(3)')).toBe('(call (call (call f 1) 2) 3)');
+    expect(exprTree('(f)(1)')).toBe('(call (group f) 1)');
+    expect(exprTree('-f() + g(1) * 2')).toBe(
+      '(+ (- (call f)) (* (call g 1) 2))',
+    );
+    expect(exprTree('a or f()')).toBe('(or a (call f))');
+  });
+
+  it('allows at most 255 arguments and keeps parsing', () => {
+    expect(errorsOf(callWith(255))).toEqual([]);
+    expect(errorsOf(callWith(256))).toEqual([
+      "[line 1] Error at '1': Can't have more than 255 arguments.",
+    ]);
+    expect(trees(callWith(256))).toHaveLength(1);
+  });
+
+  it('reports a broken call', () => {
+    const cases: [string, string][] = [
+      ['f(1;', "[line 1] Error at ';': Expect ')' after arguments."],
+      ['f(1 2);', "[line 1] Error at '2': Expect ')' after arguments."],
+      ['f(1,);', "[line 1] Error at ')': Expect expression."],
+      ['f(', '[line 1] Error at end: Expect expression.'],
+    ];
+
+    for (const [source, message] of cases) {
+      expect(errorsOf(source), source).toEqual([message]);
+    }
+    expect(trees('f(1; print 2;')).toEqual(['(print 2)']);
+  });
+});
+
+describe('parse: functions', () => {
+  const declarationWith = (count: number): string =>
+    `fun f(${Array.from({ length: count }, (_, index) => `a${index}`).join(', ')}) {}`;
+
+  it('parses function declarations', () => {
+    expect(trees('fun f() {}')).toEqual(['(fun f ())']);
+    expect(trees('fun add(a, b) { print a + b; }')).toEqual([
+      '(fun add (a b) (print (+ a b)))',
+    ]);
+    expect(trees('fun outer() { fun inner(x) {} }')).toEqual([
+      '(fun outer () (fun inner (x)))',
+    ]);
+    expect(trees('{ fun f() {} } fun g() {}')).toEqual([
+      '(block (fun f ()))',
+      '(fun g ())',
+    ]);
+  });
+
+  it('allows at most 255 parameters and keeps parsing', () => {
+    expect(errorsOf(declarationWith(255))).toEqual([]);
+    expect(errorsOf(declarationWith(256))).toEqual([
+      "[line 1] Error at 'a255': Can't have more than 255 parameters.",
+    ]);
+    expect(trees(declarationWith(256))).toHaveLength(1);
+  });
+
+  it('reports a broken declaration', () => {
+    const cases: [string, string][] = [
+      ['fun (a) {}', "[line 1] Error at '(': Expect function name."],
+      ['fun f {}', "[line 1] Error at '{': Expect '(' after function name."],
+      ['fun f(1) {}', "[line 1] Error at '1': Expect parameter name."],
+      ['fun f(a,) {}', "[line 1] Error at ')': Expect parameter name."],
+      ['fun f(a b) {}', "[line 1] Error at 'b': Expect ')' after parameters."],
+      ['fun f() 1;', "[line 1] Error at '1': Expect '{' before function body."],
+      ['fun f() { print 1;', "[line 1] Error at end: Expect '}' after block."],
+    ];
+
+    for (const [source, message] of cases) {
+      expect(errorsOf(source), source).toEqual([message]);
+    }
+    expect(trees('fun f(; print 2;')).toEqual(['(print 2)']);
+  });
+});
+
+describe('parse: return', () => {
+  it('parses return with and without a value', () => {
+    expect(trees('return;')).toEqual(['(return)']);
+    expect(trees('return 1 + 2;')).toEqual(['(return (+ 1 2))']);
+    expect(trees('fun f() { return a = 1; }')).toEqual([
+      '(fun f () (return (= a 1)))',
+    ]);
+    expect(trees('if (a) return 1; else return;')).toEqual([
+      '(if a (return 1) (return))',
+    ]);
+  });
+
+  it('reports a broken return and keeps parsing', () => {
+    expect(errorsOf('return 1')).toEqual([
+      "[line 1] Error at end: Expect ';' after return value.",
+    ]);
+    expect(errorsOf('return 1 2;')).toEqual([
+      "[line 1] Error at '2': Expect ';' after return value.",
+    ]);
+    expect(errorsOf('return')).toEqual([
+      '[line 1] Error at end: Expect expression.',
+    ]);
+    expect(trees('return 1 2; print 3;')).toEqual(['(print 3)']);
   });
 });
 
@@ -324,7 +430,7 @@ describe('parse: errors and recovery', () => {
     const keywords = ['class', 'fun', 'var', 'for', 'if', 'while', 'return'];
 
     for (const keyword of keywords) {
-      expect(errorsOf(`1 + * 2\n${keyword} 3;`)).toHaveLength(2);
+      expect(errorsOf(`1 + * 2\n${keyword} 3 4;`), keyword).toHaveLength(2);
     }
   });
 

@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { formatRuntimeError, type RuntimeError } from '../../src/errors';
+import { resolve } from '../../src/resolver/resolver';
 import { Interpreter } from '../../src/runtime/interpreter';
 import { parse } from '../../src/syntax/parser';
 import { scan } from '../../src/syntax/scanner';
@@ -16,6 +17,7 @@ const execute = (source: string): Execution => {
   const { statements } = parse(scan(source).tokens);
   const error = new Interpreter((line) => lines.push(line)).interpret(
     statements,
+    resolve(statements).locals,
   );
   return { lines, error };
 };
@@ -190,7 +192,7 @@ describe('interpret: blocks', () => {
         'var a = "global";\n{ var a = "outer"; { var a = "inner"; print a; }\nprint a; }\nprint a;',
       ),
     ).toEqual(['inner', 'outer', 'global']);
-    expect(outputOf('var a = 1; { var a = a + 1; print a; } print a;')).toEqual(
+    expect(outputOf('var a = 1; { var b = a + 1; print b; } print a;')).toEqual(
       ['2', '1'],
     );
   });
@@ -208,8 +210,10 @@ describe('interpret: blocks', () => {
   it('leaves the block scope after a runtime error', () => {
     const lines: string[] = [];
     const interpreter = new Interpreter((line) => lines.push(line));
-    const run = (source: string): RuntimeError | null =>
-      interpreter.interpret(parse(scan(source).tokens).statements);
+    const run = (source: string): RuntimeError | null => {
+      const { statements } = parse(scan(source).tokens);
+      return interpreter.interpret(statements, resolve(statements).locals);
+    };
 
     expect(
       run('var a = "outer"; { var a = "inner"; print -"x"; }')?.message,
@@ -320,12 +324,14 @@ describe('interpret: loops', () => {
       '0',
       '1',
     ]);
-    expect(
-      outputOf('for (var i = 0; i < 2;) { print i; i = i + 1; }'),
-    ).toEqual(['0', '1']);
+    expect(outputOf('for (var i = 0; i < 2;) { print i; i = i + 1; }')).toEqual(
+      ['0', '1'],
+    );
     expect(outputOf('for (var i = 0; false; i = i + 1) print 1;')).toEqual([]);
     expect(
-      outputOf('var n = 0; for (var i = 0; i < 4; i = i + 1) n = n + i; print n;'),
+      outputOf(
+        'var n = 0; for (var i = 0; i < 4; i = i + 1) n = n + i; print n;',
+      ),
     ).toEqual(['6']);
     expect(errorOf('for (;;) -"x";')).toBe(
       'Operand must be a number.\n[line 1]',
@@ -338,6 +344,220 @@ describe('interpret: loops', () => {
         'var i = "out"; for (var i = 0; i < 1; i = i + 1) print i; print i;',
       ),
     ).toEqual(['0', 'out']);
+  });
+});
+
+describe('interpret: calls', () => {
+  it('rejects a value that is not callable', () => {
+    for (const source of ['true();', 'nil();', '123();', '"text"();']) {
+      expect(errorOf(source), source).toBe(
+        'Can only call functions and classes.\n[line 1]',
+      );
+    }
+    expect(errorOf('"a"(\n1,\n2\n);')).toBe(
+      'Can only call functions and classes.\n[line 4]',
+    );
+  });
+
+  it('evaluates the callee and the arguments before the call error', () => {
+    expect(errorOf('x(y);')).toBe("Undefined variable 'x'.\n[line 1]");
+    expect(errorOf('nil(y);')).toBe("Undefined variable 'y'.\n[line 1]");
+    expect(errorOf('nil(-"s");')).toBe('Operand must be a number.\n[line 1]');
+    expect(errorOf('nil(1, -"s", y);')).toBe(
+      'Operand must be a number.\n[line 1]',
+    );
+    expect(errorOf('fun f(a) {} f(1, -"s");')).toBe(
+      'Operand must be a number.\n[line 1]',
+    );
+    expect(
+      outputOf(
+        'var i = 0; fun f(a, b) { print a; print b; } f(i = i + 1, i = i + 1);',
+      ),
+    ).toEqual(['1', '2']);
+  });
+});
+
+describe('interpret: functions', () => {
+  it('declares and calls functions', () => {
+    expect(outputOf('fun hello() { print "hi"; } hello(); hello();')).toEqual([
+      'hi',
+      'hi',
+    ]);
+    expect(
+      outputOf('fun add(a, b) { print a + b; } add(1, 2); add("x", "y");'),
+    ).toEqual(['3', 'xy']);
+    expect(outputOf('fun f() {} print f();')).toEqual(['nil']);
+    expect(errorOf('fun f() { print nope; } f();')).toBe(
+      "Undefined variable 'nope'.\n[line 1]",
+    );
+  });
+
+  it('runs every call in its own scope inside the declaration scope', () => {
+    expect(
+      outputOf(
+        'fun count(n) { if (n > 0) { print n; count(n - 1); print n; } } count(2);',
+      ),
+    ).toEqual(['2', '1', '1', '2']);
+    expect(
+      outputOf('var a = "global"; fun f(a) { print a; } f("param"); print a;'),
+    ).toEqual(['param', 'global']);
+    expect(errorOf('fun f(a) { var b = a; } f(1); print b;')).toBe(
+      "Undefined variable 'b'.\n[line 1]",
+    );
+    expect(
+      outputOf('fun outer(x) { fun inner() { print x; } inner(); } outer(7);'),
+    ).toEqual(['7']);
+    expect(
+      outputOf('var n = 0; fun inc() { n = n + 1; } inc(); inc(); print n;'),
+    ).toEqual(['2']);
+  });
+
+  it('treats functions as values', () => {
+    expect(outputOf('fun foo() {} print foo; print clock;')).toEqual([
+      '<fn foo>',
+      '<native fn>',
+    ]);
+    expect(
+      outputOf(
+        'fun f() { print "f"; } var g = f; g(); print f == g; print f == clock; print !f;',
+      ),
+    ).toEqual(['f', 'true', 'false', 'false']);
+  });
+
+  it('checks the number of arguments before running the body', () => {
+    expect(errorOf('fun f(a, b) {} f(1);')).toBe(
+      'Expected 2 arguments but got 1.\n[line 1]',
+    );
+    expect(errorOf('fun f(a, b) {} f(1, 2, 3, 4);')).toBe(
+      'Expected 2 arguments but got 4.\n[line 1]',
+    );
+    expect(errorOf('fun f(a) {}\nf(\n1,\n2\n);')).toBe(
+      'Expected 1 arguments but got 2.\n[line 5]',
+    );
+    expect(execute('fun f(a) { print "ran"; } f();').lines).toEqual([]);
+  });
+
+  it('provides clock in seconds', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(5500);
+      expect(outputOf('print clock();')).toEqual(['5.5']);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(errorOf('clock(1);')).toBe(
+      'Expected 0 arguments but got 1.\n[line 1]',
+    );
+  });
+});
+
+describe('interpret: return', () => {
+  it('returns the value of the expression or nil from the innermost function', () => {
+    expect(outputOf('fun f() { return 1 + 2; } print f();')).toEqual(['3']);
+    expect(outputOf('fun f() { return; } print f();')).toEqual(['nil']);
+    expect(outputOf('fun f() { return "a"; print "b"; } print f();')).toEqual([
+      'a',
+    ]);
+    expect(errorOf('fun f() { return -"s"; } f();')).toBe(
+      'Operand must be a number.\n[line 1]',
+    );
+    expect(
+      outputOf(
+        'fun g() { return "g"; } fun f() { g(); return "f"; } print f(); print g();',
+      ),
+    ).toEqual(['f', 'g']);
+    expect(
+      outputOf(
+        'fun fib(n) { if (n < 2) return n; return fib(n - 1) + fib(n - 2); } print fib(10);',
+      ),
+    ).toEqual(['55']);
+  });
+
+  it('leaves nested blocks and loops and restores the scope', () => {
+    expect(
+      outputOf(
+        'fun f() { for (var i = 0; i < 10; i = i + 1) { if (i == 3) { return i; } } } print f();',
+      ),
+    ).toEqual(['3']);
+    expect(errorOf('fun f() { { var a = 1; return a; } } f(); print a;')).toBe(
+      "Undefined variable 'a'.\n[line 1]",
+    );
+  });
+
+  it('returns closures that keep their own variables', () => {
+    const counter =
+      'fun makeCounter() { var i = 0; fun count() { i = i + 1; print i; } return count; }';
+
+    expect(
+      outputOf(
+        `${counter} var a = makeCounter(); var b = makeCounter(); a(); a(); b();`,
+      ),
+    ).toEqual(['1', '2', '1']);
+  });
+});
+
+describe('interpret: call depth', () => {
+  it('counts calls correctly after a runtime error', () => {
+    const interpreter = new Interpreter(() => undefined, 3);
+    const interpret = (source: string): RuntimeError | null => {
+      const { statements } = parse(scan(source).tokens);
+      return interpreter.interpret(statements, resolve(statements).locals);
+    };
+
+    expect(
+      interpret('fun boom() { -"s"; } fun a() { boom(); } a();'),
+    ).not.toBeNull();
+    expect(interpret('fun g() {} fun f() { g(); } f();')).toBeNull();
+  });
+});
+
+describe('interpret: binding of variables', () => {
+  it('uses the variable declared above the function, not below', () => {
+    expect(
+      outputOf(
+        'var a = "global"; { fun showA() { print a; } showA(); var a = "block"; showA(); }',
+      ),
+    ).toEqual(['global', 'global']);
+  });
+
+  it('assigns to the global, not to a local declared below', () => {
+    expect(
+      outputOf(
+        'var a = "global"; { fun assign() { a = "assigned"; } var a = "inner"; assign(); print a; } print a;',
+      ),
+    ).toEqual(['inner', 'assigned']);
+  });
+
+  it('does not see a local function declared below', () => {
+    expect(
+      errorOf(
+        '{ fun isEven(n) { if (n == 0) return true; return isOdd(n - 1); } fun isOdd(n) { return isEven(n - 1); } isEven(2); }',
+      ),
+    ).toBe("Undefined variable 'isOdd'.\n[line 1]");
+  });
+
+  it('finds a global declared below the function', () => {
+    expect(outputOf('fun f() { print late; } var late = "ok"; f();')).toEqual([
+      'ok',
+    ]);
+  });
+
+  it('reads a local without a value as nil', () => {
+    expect(outputOf('{ var a; print a; }')).toEqual(['nil']);
+  });
+
+  it('hides a global with a parameter of the same name', () => {
+    expect(
+      outputOf('var a = 1; fun f(a) { a = 2; print a; } f(0); print a;'),
+    ).toEqual(['2', '1']);
+  });
+
+  it('reports an unknown variable read in a block', () => {
+    expect(errorOf('{ print x; }')).toBe("Undefined variable 'x'.\n[line 1]");
+  });
+
+  it('reports an unknown variable assigned in a block', () => {
+    expect(errorOf('{ x = 1; }')).toBe("Undefined variable 'x'.\n[line 1]");
   });
 });
 
@@ -413,16 +633,16 @@ describe('interpret: runtime errors', () => {
       },
     };
 
-    expect(() => new Interpreter(() => {}).interpret([statement])).toThrow(
-      "Unknown binary operator ','.",
-    );
+    expect(() =>
+      new Interpreter(() => {}).interpret([statement], new Map()),
+    ).toThrow("Unknown binary operator ','.");
   });
 
   it('rejects a statement of an unknown kind', () => {
     const unknown = { kind: 'unknown' } as unknown as Stmt;
 
-    expect(() => new Interpreter(() => {}).interpret([unknown])).toThrow(
-      'Unexpected value: {"kind":"unknown"}',
-    );
+    expect(() =>
+      new Interpreter(() => {}).interpret([unknown], new Map()),
+    ).toThrow('Unexpected value: {"kind":"unknown"}');
   });
 });

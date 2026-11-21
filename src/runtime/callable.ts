@@ -1,0 +1,79 @@
+import type { FunctionStmt } from '../syntax/ast';
+import { Environment } from './environment';
+import type { Interpreter } from './interpreter';
+import type { LoxValue } from './values';
+
+export class ReturnSignal {
+  readonly value: LoxValue;
+
+  constructor(value: LoxValue) {
+    this.value = value;
+  }
+}
+
+export abstract class LoxCallable {
+  abstract get arity(): number;
+  abstract call(interpreter: Interpreter, args: readonly LoxValue[]): LoxValue;
+  abstract toString(): string;
+}
+
+export class NativeFunction extends LoxCallable {
+  private readonly parameterCount: number;
+  private readonly implementation: (args: readonly LoxValue[]) => LoxValue;
+
+  constructor(
+    parameterCount: number,
+    implementation: (args: readonly LoxValue[]) => LoxValue,
+  ) {
+    super();
+    this.parameterCount = parameterCount;
+    this.implementation = implementation;
+  }
+
+  get arity(): number {
+    return this.parameterCount;
+  }
+
+  call(_interpreter: Interpreter, args: readonly LoxValue[]): LoxValue {
+    return this.implementation(args);
+  }
+
+  toString(): string {
+    return '<native fn>';
+  }
+}
+
+export class LoxFunction extends LoxCallable {
+  private readonly declaration: FunctionStmt;
+  private readonly closure: Environment;
+
+  constructor(declaration: FunctionStmt, closure: Environment) {
+    super();
+    this.declaration = declaration;
+    this.closure = closure;
+  }
+
+  get arity(): number {
+    return this.declaration.params.length;
+  }
+
+  call(interpreter: Interpreter, args: readonly LoxValue[]): LoxValue {
+    const environment = new Environment(this.closure);
+    this.declaration.params.forEach((param, index) => {
+      environment.define(param.lexeme, args[index] as LoxValue);
+    });
+    try {
+      interpreter.executeBlock(this.declaration.body, environment);
+    } catch (error) {
+      if (error instanceof ReturnSignal) {
+        return error.value;
+      }
+      throw error;
+    }
+    return null;
+  }
+
+  toString(): string {
+    return `<fn ${this.declaration.name.lexeme}>`;
+  }
+}

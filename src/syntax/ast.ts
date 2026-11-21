@@ -43,6 +43,13 @@ export interface AssignExpr {
   readonly value: Expr;
 }
 
+export interface CallExpr {
+  readonly kind: 'call';
+  readonly callee: Expr;
+  readonly paren: Token;
+  readonly args: readonly Expr[];
+}
+
 export type Expr =
   | LiteralExpr
   | GroupingExpr
@@ -50,7 +57,8 @@ export type Expr =
   | BinaryExpr
   | LogicalExpr
   | VariableExpr
-  | AssignExpr;
+  | AssignExpr
+  | CallExpr;
 
 export interface ExpressionStmt {
   readonly kind: 'expression';
@@ -86,10 +94,25 @@ export interface WhileStmt {
   readonly body: Stmt;
 }
 
+export interface FunctionStmt {
+  readonly kind: 'function';
+  readonly name: Token;
+  readonly params: readonly Token[];
+  readonly body: readonly Stmt[];
+}
+
+export interface ReturnStmt {
+  readonly kind: 'return';
+  readonly keyword: Token;
+  readonly value: Expr | null;
+}
+
 export type Stmt =
   | ExpressionStmt
   | PrintStmt
   | VarStmt
   | BlockStmt
   | IfStmt
-  | WhileStmt;
+  | WhileStmt
+  | FunctionStmt
+  | ReturnStmt;

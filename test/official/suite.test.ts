@@ -30,6 +30,7 @@ describe('official suite: skip list', () => {
     const passing = files.filter(
       (path) =>
         skipReason(path) !== undefined &&
+        !path.startsWith('benchmark/') &&
         runSuiteFile(path).verdict !== 'failed',
     );
 

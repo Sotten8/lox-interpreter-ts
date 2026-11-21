@@ -26,11 +26,61 @@ describe('run', () => {
     ]);
   });
 
+  it('reports a static error and exits with 65', () => {
+    expect(run('return 1;')).toEqual({
+      output: [],
+      errors: ["[line 1] Error at 'return': Can't return from top-level code."],
+      exitCode: 65,
+    });
+  });
+
+  it('does not run anything when there is a static error', () => {
+    const result = run('print 1;\nreturn 2;');
+
+    expect(result.output).toEqual([]);
+    expect(result.exitCode).toBe(65);
+  });
+
+  it('lists every static error', () => {
+    expect(run('{ var a; var a; }\nreturn 1;').errors).toEqual([
+      "[line 1] Error at 'a': Already a variable with this name in this scope.",
+      "[line 2] Error at 'return': Can't return from top-level code.",
+    ]);
+  });
+
+  it('reports only syntax errors when there are both kinds', () => {
+    expect(run('var = 1;\nreturn 2;').errors).toEqual([
+      "[line 1] Error at '=': Expect variable name.",
+    ]);
+  });
+
   it('does not run anything when there is a compile error', () => {
     const result = run('print 1;\nprint ;');
 
     expect(result.output).toEqual([]);
     expect(result.exitCode).toBe(65);
+  });
+
+  it('limits the depth of calls', () => {
+    const recursion = (depth: number): string =>
+      `fun f(n) { if (n > 0) f(n - 1); } f(${depth});`;
+
+    expect(run(recursion(2), { maxCallDepth: 3 }).exitCode).toBe(0);
+    expect(run(recursion(3), { maxCallDepth: 3 })).toEqual({
+      output: [],
+      errors: ['Stack overflow.\n[line 1]'],
+      exitCode: 70,
+    });
+    expect(
+      run('fun f() { return 1; } for (var i = 0; i < 9; i = i + 1) f();', {
+        maxCallDepth: 2,
+      }).exitCode,
+    ).toBe(0);
+    expect(run('fun f() {\n  f();\n}\nf();')).toEqual({
+      output: [],
+      errors: ['Stack overflow.\n[line 2]'],
+      exitCode: 70,
+    });
   });
 
   it('reports a runtime error, exits with 70 and keeps earlier output', () => {
