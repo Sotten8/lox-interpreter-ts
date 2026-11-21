@@ -1,6 +1,8 @@
 import type { LoxCallable } from './callable';
+import type { LoxInstance } from './lox-class';
 
-export type LoxValue = number | string | boolean | null | LoxCallable;
+export type LoxValue =
+  number | string | boolean | null | LoxCallable | LoxInstance;
 
 export function isTruthy(value: LoxValue): boolean {
   return value !== null && value !== false;
