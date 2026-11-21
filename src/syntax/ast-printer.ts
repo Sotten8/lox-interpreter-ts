@@ -59,6 +59,8 @@ export function printStmt(stmt: Stmt): string {
       return stmt.value === null
         ? '(return)'
         : `(return ${printExpr(stmt.value)})`;
+    case 'class':
+      return `(class ${stmt.name.lexeme})`;
     case 'function': {
       const params = `(${stmt.params.map((param) => param.lexeme).join(' ')})`;
       return `(${['fun', stmt.name.lexeme, params, ...stmt.body.map(printStmt)].join(' ')})`;

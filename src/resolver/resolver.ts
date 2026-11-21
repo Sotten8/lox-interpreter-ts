@@ -70,6 +70,10 @@ class Resolver {
         this.define(stmt.name);
         this.resolveFunction(stmt);
         return;
+      case 'class':
+        this.declare(stmt.name);
+        this.define(stmt.name);
+        return;
       case 'return':
         if (this.currentFunction === 'none') {
           this.report(stmt.keyword, "Can't return from top-level code.");

@@ -107,6 +107,11 @@ export interface ReturnStmt {
   readonly value: Expr | null;
 }
 
+export interface ClassStmt {
+  readonly kind: 'class';
+  readonly name: Token;
+}
+
 export type Stmt =
   | ExpressionStmt
   | PrintStmt
@@ -115,4 +120,5 @@ export type Stmt =
   | IfStmt
   | WhileStmt
   | FunctionStmt
-  | ReturnStmt;
+  | ReturnStmt
+  | ClassStmt;

@@ -20,6 +20,7 @@ import {
   NativeFunction,
   ReturnSignal,
 } from './callable';
+import { LoxClass } from './lox-class';
 
 export type Output = (line: string) => void;
 
@@ -136,6 +137,12 @@ export class Interpreter {
         this.environment.define(
           stmt.name.lexeme,
           new LoxFunction(stmt, this.environment),
+        );
+        return;
+      case 'class':
+        this.environment.define(
+          stmt.name.lexeme,
+          new LoxClass(stmt.name.lexeme),
         );
         return;
       case 'return':

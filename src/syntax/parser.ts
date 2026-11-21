@@ -42,6 +42,9 @@ class Parser {
 
   private declaration(): Stmt | null {
     try {
+      if (this.match('CLASS')) {
+        return this.classDeclaration();
+      }
       if (this.match('FUN')) {
         return this.functionDeclaration();
       }
@@ -56,6 +59,13 @@ class Parser {
       }
       throw error;
     }
+  }
+
+  private classDeclaration(): Stmt {
+    const name = this.consume('IDENTIFIER', 'Expect class name.');
+    this.consume('LEFT_BRACE', "Expect '{' before class body.");
+    this.consume('RIGHT_BRACE', "Expect '}' after class body.");
+    return { kind: 'class', name };
   }
 
   private functionDeclaration(): Stmt {
