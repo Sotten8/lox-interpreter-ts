@@ -1,7 +1,7 @@
 import fc from 'fast-check';
 import { describe, it } from 'vitest';
 import { resolve } from '../../src/resolver/resolver';
-import { Interpreter } from '../../src/runtime/interpreter';
+import { Interpreter } from '../../src/interpreter/interpreter';
 import { stringify } from '../../src/runtime/values';
 import { parse } from '../../src/syntax/parser';
 import { scan } from '../../src/syntax/scanner';

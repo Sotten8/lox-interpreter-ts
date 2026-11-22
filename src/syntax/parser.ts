@@ -1,5 +1,5 @@
 import type { Expr, FunctionStmt, Stmt, VariableExpr } from './ast';
-import { compileErrorAt, type CompileError } from '../errors';
+import { compileErrorAt, type CompileError } from '../common/errors';
 import type { Token, TokenType } from './token';
 
 export interface ParseResult {

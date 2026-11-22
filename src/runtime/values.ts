@@ -1,5 +1,5 @@
-import type { LoxCallable } from './callable';
-import type { LoxInstance } from './lox-class';
+import type { LoxCallable } from '../interpreter/callable';
+import type { LoxInstance } from '../interpreter/lox-class';
 
 export type LoxValue =
   number | string | boolean | null | LoxCallable | LoxInstance;

@@ -2,9 +2,9 @@ import {
   formatCompileError,
   formatRuntimeError,
   type CompileError,
-} from './errors';
+} from './common/errors';
 import { resolve } from './resolver/resolver';
-import { Interpreter } from './runtime/interpreter';
+import { Interpreter } from './interpreter/interpreter';
 import { printStmt } from './syntax/ast-printer';
 import { parse, type ParseResult } from './syntax/parser';
 import { scan } from './syntax/scanner';

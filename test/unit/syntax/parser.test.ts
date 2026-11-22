@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { formatCompileError } from '../../src/errors';
-import { printStmt } from '../../src/syntax/ast-printer';
-import { MAX_NESTING, parse, type ParseResult } from '../../src/syntax/parser';
-import { scan } from '../../src/syntax/scanner';
+import { formatCompileError } from '../../../src/common/errors';
+import { printStmt } from '../../../src/syntax/ast-printer';
+import {
+  MAX_NESTING,
+  parse,
+  type ParseResult,
+} from '../../../src/syntax/parser';
+import { scan } from '../../../src/syntax/scanner';
 
 const parseSource = (source: string): ParseResult => parse(scan(source).tokens);
 

@@ -2,7 +2,7 @@ import type { FunctionStmt } from '../syntax/ast';
 import { Environment } from './environment';
 import type { Interpreter } from './interpreter';
 import type { LoxInstance } from './lox-class';
-import type { LoxValue } from './values';
+import type { LoxValue } from '../runtime/values';
 
 export class ReturnSignal {
   readonly value: LoxValue;

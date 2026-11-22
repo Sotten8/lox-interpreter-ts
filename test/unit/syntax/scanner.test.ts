@@ -2,10 +2,10 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { formatCompileError } from '../../src/errors';
-import { scan } from '../../src/syntax/scanner';
-import type { TokenType } from '../../src/syntax/token';
-import { parseExpectations } from '../official/expectations';
+import { formatCompileError } from '../../../src/common/errors';
+import { scan } from '../../../src/syntax/scanner';
+import type { TokenType } from '../../../src/syntax/token';
+import { parseExpectations } from '../../official/expectations';
 
 const types = (source: string): TokenType[] =>
   scan(source).tokens.map((token) => token.type);
@@ -337,7 +337,7 @@ describe('scan: errors', () => {
 
 describe('scan on official tests', () => {
   const suiteDirectory = fileURLToPath(
-    new URL('../official/suite/', import.meta.url),
+    new URL('../../official/suite/', import.meta.url),
   );
   const files = readdirSync(suiteDirectory, {
     recursive: true,

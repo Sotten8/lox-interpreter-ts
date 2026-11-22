@@ -8,8 +8,8 @@ import type {
   VariableExpr,
 } from '../syntax/ast';
 import type { Token } from '../syntax/token';
-import { compileErrorAt, type CompileError } from '../errors';
-import { assertNever } from '../assert-never';
+import { compileErrorAt, type CompileError } from '../common/errors';
+import { assertNever } from '../common/assert-never';
 
 type LocalExpr = VariableExpr | AssignExpr | ThisExpr | SuperExpr;
 
