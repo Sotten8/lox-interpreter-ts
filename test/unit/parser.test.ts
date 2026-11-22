@@ -557,6 +557,35 @@ describe('parse: inheritance', () => {
   });
 });
 
+describe('parse: super', () => {
+  it.each([
+    ['super.speak', '(super speak)'],
+    ['super.speak()', '(call (super speak))'],
+  ])('parses %s', (source, tree) => {
+    expect(exprTree(source)).toBe(tree);
+  });
+
+  it('keeps the super keyword and the method name in the node', () => {
+    const [statement] = parseSource('super.speak;').statements;
+
+    expect(
+      statement?.kind === 'expression' && statement.expression,
+    ).toMatchObject({
+      kind: 'super',
+      keyword: { lexeme: 'super', type: 'SUPER' },
+      method: { lexeme: 'speak', type: 'IDENTIFIER' },
+    });
+  });
+
+  it.each([
+    ['super(1);', "[line 1] Error at '(': Expect '.' after 'super'."],
+    ['super.7;', "[line 1] Error at '7': Expect superclass method name."],
+    ['super.speak = 1;', "[line 1] Error at '=': Invalid assignment target."],
+  ])('reports an error for %j', (source, message) => {
+    expect(errorsOf(source)).toEqual([message]);
+  });
+});
+
 describe('parse: this', () => {
   it.each([
     ['this', 'this'],

@@ -19,7 +19,9 @@ const INITIALIZER_RETURN = "Can't return a value from an initializer.";
 const depthsOf = (source: string): [string, number][] => {
   const { statements } = parse(scan(source).tokens);
   return [...resolve(statements).locals].map(([expr, depth]) => [
-    expr.kind === 'this' ? expr.keyword.lexeme : expr.name.lexeme,
+    expr.kind === 'this' || expr.kind === 'super'
+      ? expr.keyword.lexeme
+      : expr.name.lexeme,
     depth,
   ]);
 };
@@ -595,6 +597,66 @@ describe('resolve: initializers', () => {
     expect(depthsOf('class Point { init(x) { return x; } }')).toEqual([
       ['x', 0],
     ]);
+  });
+});
+
+describe('resolve: super', () => {
+  const SUPER_OUTSIDE_CLASS = "Can't use 'super' outside of a class.";
+  const SUPER_NO_SUPERCLASS =
+    "Can't use 'super' in a class with no superclass.";
+
+  it('resolves super two scopes above a method body', () => {
+    expect(
+      depthsOf('class A {} class B < A { m() { return super.m; } }'),
+    ).toEqual([['super', 2]]);
+  });
+
+  it('puts the super scope between the class and this', () => {
+    expect(
+      depthsOf('{ class A {} class B < A { m() { B; return this; } } }'),
+    ).toEqual([
+      ['A', 0],
+      ['B', 3],
+      ['this', 1],
+    ]);
+  });
+
+  it('closes the super scope after the class', () => {
+    expect(depthsOf('{ class A {} class B < A {} B; }')).toEqual([
+      ['A', 0],
+      ['B', 0],
+    ]);
+  });
+
+  it('opens no super scope for a class without a superclass', () => {
+    expect(depthsOf('{ class A { m() { A; } } }')).toEqual([['A', 2]]);
+  });
+
+  it.each([
+    ['at the top level', 'super.m;'],
+    ['after a subclass has ended', 'class A {} class B < A {} super.m;'],
+  ])('reports super %s', (_, source) => {
+    expect(errorsOf(source)).toEqual([
+      `[line 1] Error at 'super': ${SUPER_OUTSIDE_CLASS}`,
+    ]);
+  });
+
+  it.each([
+    ['in a class without a superclass', 'class A { m() { super.m; } }'],
+    [
+      'in a class without a superclass inside a subclass method',
+      'class A {} class B < A { m() { class C { n() { super.m; } } } }',
+    ],
+  ])('reports super %s', (_, source) => {
+    expect(errorsOf(source)).toEqual([
+      `[line 1] Error at 'super': ${SUPER_NO_SUPERCLASS}`,
+    ]);
+  });
+
+  it('allows super in a subclass method after an inner class has ended', () => {
+    expect(
+      errorsOf('class A {} class B < A { m() { class C {} return super.m; } }'),
+    ).toEqual([]);
   });
 });
 

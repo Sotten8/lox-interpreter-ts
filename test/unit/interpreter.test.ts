@@ -1212,6 +1212,78 @@ describe('interpret: inheritance', () => {
   });
 });
 
+describe('interpret: super', () => {
+  it('calls the superclass version of an overridden method', () => {
+    expect(
+      outputOf(
+        'class Animal { sound() { return "..."; } } class Dog < Animal { sound() { return "woof " + super.sound(); } } print Dog().sound();',
+      ),
+    ).toEqual(['woof ...']);
+  });
+
+  it('runs the superclass method with this of the current instance', () => {
+    expect(
+      outputOf(
+        'class Base { label() { return this.name; } } class Child < Base { init() { this.name = "kid"; } label() { return "<" + super.label() + ">"; } } print Child().label();',
+      ),
+    ).toEqual(['<kid>']);
+  });
+
+  it('starts from the superclass of the class where super is written', () => {
+    expect(
+      outputOf(
+        'class Coin { side() { return "coin"; } } class Penny < Coin { side() { return "penny"; } show() { return super.side(); } } class OldPenny < Penny {} print OldPenny().show();',
+      ),
+    ).toEqual(['coin']);
+  });
+
+  it('finds a method two classes above through super', () => {
+    expect(
+      outputOf(
+        'class A { who() { return "a"; } } class B < A {} class C < B { who() { return "c" + super.who(); } } print C().who();',
+      ),
+    ).toEqual(['ca']);
+  });
+
+  it('keeps super in a function created inside a method', () => {
+    expect(
+      outputOf(
+        'class A { who() { return "a"; } } class B < A { who() { fun inner() { return super.who(); } return inner; } } print B().who()();',
+      ),
+    ).toEqual(['a']);
+  });
+
+  it('keeps outer variables visible in methods of a subclass', () => {
+    expect(
+      outputOf(
+        '{ var greeting = "hi"; class A {} class B < A { say() { return greeting; } } print B().say(); }',
+      ),
+    ).toEqual(['hi']);
+  });
+
+  it('does not find fields through super', () => {
+    expect(
+      errorOf(
+        'class A {} class B < A { init() { this.x = 1; } m() { return super.x; } } B().m();',
+      ),
+    ).toBe("Undefined property 'x'.\n[line 1]");
+  });
+
+  it('reports a missing method at the line of its name', () => {
+    expect(
+      errorOf(
+        'class A {}\nclass B < A { m() { super\n.\nmissing(); } }\nB().m();',
+      ),
+    ).toBe("Undefined property 'missing'.\n[line 4]");
+  });
+
+  it('fails loudly when super was not resolved', () => {
+    expect(() => execute('super.m;')).toThrow(
+      "Resolver bug: 'super' is not resolved.",
+    );
+  });
+});
+
 describe('interpret: binding of variables', () => {
   it('uses the variable declared above the function, not below', () => {
     expect(
