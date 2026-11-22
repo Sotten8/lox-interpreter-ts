@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { formatCompileError } from '../../src/errors';
 import { printStmt } from '../../src/syntax/ast-printer';
-import { parse, type ParseResult } from '../../src/syntax/parser';
+import { MAX_NESTING, parse, type ParseResult } from '../../src/syntax/parser';
 import { scan } from '../../src/syntax/scanner';
 
 const parseSource = (source: string): ParseResult => parse(scan(source).tokens);
@@ -583,6 +583,97 @@ describe('parse: super', () => {
     ['super.speak = 1;', "[line 1] Error at '=': Invalid assignment target."],
   ])('reports an error for %j', (source, message) => {
     expect(errorsOf(source)).toEqual([message]);
+  });
+});
+
+describe('parse: nesting limit', () => {
+  const parens = (n: number): string =>
+    `print ${'('.repeat(n)}1${')'.repeat(n)};`;
+
+  const NESTED: [string, (n: number) => string][] = [
+    ['parentheses', parens],
+    ['unary operators', (n) => `print ${'-'.repeat(n)}1;`],
+    ['assignments', (n) => `${'a = '.repeat(n)}1;`],
+    ['binary operators', (n) => `print 1${' * 2'.repeat(n)};`],
+    ['logical operators', (n) => `print a${' and b'.repeat(n)};`],
+    ['calls', (n) => `f${'()'.repeat(n)};`],
+    ['arguments', (n) => `${'f('.repeat(n)}1${')'.repeat(n)};`],
+    ['property accesses', (n) => `a${'.b'.repeat(n)};`],
+    ['blocks', (n) => `${'{'.repeat(n)}print 1;${'}'.repeat(n)}`],
+    ['if statements', (n) => `${'if (a) '.repeat(n)}print 1;`],
+    ['else branches', (n) => `${'if (a) print 0; else '.repeat(n)}print 1;`],
+    ['while loops', (n) => `${'while (a) '.repeat(n)}print 1;`],
+    ['for loops', (n) => `${'for (;;) '.repeat(n)}print 1;`],
+    ['functions', (n) => `${'fun f() {'.repeat(n)}${'}'.repeat(n)}`],
+    ['methods', (n) => `${'class C { m() {'.repeat(n)}${'} }'.repeat(n)}`],
+  ];
+
+  const TOO_DEEP = expect.stringMatching(/Too much nesting\.$/);
+
+  it.each(NESTED)('allows %s nested up to the limit', (_, make) => {
+    expect(errorsOf(make(MAX_NESTING))).toEqual([]);
+  });
+
+  it.each(NESTED)('rejects %s nested over the limit', (_, make) => {
+    expect(errorsOf(make(MAX_NESTING + 1))).toEqual([TOO_DEEP]);
+  });
+
+  it('reports too much nesting at the first token over the limit', () => {
+    expect(errorsOf(parens(MAX_NESTING + 1))).toEqual([
+      "[line 1] Error at '1': Too much nesting.",
+    ]);
+  });
+
+  it('allows different kinds of nesting together up to the limit', () => {
+    const half = MAX_NESTING / 2;
+
+    expect(
+      errorsOf(`${'{'.repeat(half)}${parens(half)}${'}'.repeat(half)}`),
+    ).toEqual([]);
+  });
+
+  it('counts different kinds of nesting together', () => {
+    const half = MAX_NESTING / 2;
+
+    expect(
+      errorsOf(`${'{'.repeat(half)}${parens(half + 1)}${'}'.repeat(half)}`),
+    ).toEqual([TOO_DEEP]);
+  });
+
+  it('starts from zero for every statement', () => {
+    expect(errorsOf(`${parens(MAX_NESTING)} ${parens(MAX_NESTING)}`)).toEqual(
+      [],
+    );
+  });
+
+  it('starts from zero after a chain of operators', () => {
+    const chain = `print 1${' + 1'.repeat(MAX_NESTING)};`;
+
+    expect(errorsOf(`${chain} ${chain}`)).toEqual([]);
+  });
+
+  it('starts from zero after a chain of calls', () => {
+    const chain = `f${'()'.repeat(MAX_NESTING)};`;
+
+    expect(errorsOf(`${chain} ${chain}`)).toEqual([]);
+  });
+
+  it('starts from zero after a syntax error inside nesting', () => {
+    const broken = `print ${'('.repeat(MAX_NESTING / 2)};`;
+
+    expect(errorsOf(`${broken} ${parens(MAX_NESTING)}`)).toEqual([
+      "[line 1] Error at ';': Expect expression.",
+    ]);
+  });
+
+  it('stops parsing after too much nesting', () => {
+    expect(errorsOf(`${parens(MAX_NESTING + 1)} print ;`)).toEqual([
+      "[line 1] Error at '1': Too much nesting.",
+    ]);
+  });
+
+  it('keeps the statements before too much nesting', () => {
+    expect(trees(`print 1; ${parens(MAX_NESTING + 1)}`)).toEqual(['(print 1)']);
   });
 });
 
