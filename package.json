@@ -18,6 +18,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "coverage": "vitest run --coverage",
+    "mutation": "stryker run",
     "lox": "tsx src/main.ts",
     "ast": "tsx src/main.ts --ast",
     "format": "prettier --write .",
