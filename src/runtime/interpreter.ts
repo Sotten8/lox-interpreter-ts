@@ -66,7 +66,11 @@ function add(operator: Token, left: LoxValue, right: LoxValue): LoxValue {
     return left + right;
   }
   if (typeof left === 'string' && typeof right === 'string') {
-    return left + right;
+    try {
+      return left + right;
+    } catch {
+      throw new RuntimeError(operator.line, 'String is too long.');
+    }
   }
   throw new RuntimeError(
     operator.line,
@@ -298,6 +302,11 @@ export class Interpreter {
     this.callDepth++;
     try {
       return callee.call(this, args);
+    } catch (error) {
+      if (error instanceof RangeError) {
+        throw new RuntimeError(expr.paren.line, 'Stack overflow.');
+      }
+      throw error;
     } finally {
       this.callDepth--;
     }
