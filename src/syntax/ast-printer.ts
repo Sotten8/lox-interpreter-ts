@@ -1,3 +1,4 @@
+import { assertNever } from '../assert-never';
 import type { Expr, LiteralValue, Stmt } from './ast';
 
 function printLiteral(value: LiteralValue): string {
@@ -35,6 +36,8 @@ export function printExpr(expr: Expr): string {
       return 'this';
     case 'super':
       return `(super ${expr.method.lexeme})`;
+    default:
+      return assertNever(expr);
   }
 }
 
@@ -78,5 +81,7 @@ export function printStmt(stmt: Stmt): string {
       const params = `(${stmt.params.map((param) => param.lexeme).join(' ')})`;
       return `(${['fun', stmt.name.lexeme, params, ...stmt.body.map(printStmt)].join(' ')})`;
     }
+    default:
+      return assertNever(stmt);
   }
 }
