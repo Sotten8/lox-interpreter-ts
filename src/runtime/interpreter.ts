@@ -224,6 +224,8 @@ export class Interpreter {
         return this.lookUpVariable(expr.keyword, expr);
       case 'super':
         return this.evaluateSuper(expr);
+      default:
+        return assertNever(expr);
     }
   }
 

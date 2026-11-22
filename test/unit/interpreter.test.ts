@@ -4,7 +4,7 @@ import { resolve } from '../../src/resolver/resolver';
 import { Interpreter } from '../../src/runtime/interpreter';
 import { parse } from '../../src/syntax/parser';
 import { scan } from '../../src/syntax/scanner';
-import type { Stmt } from '../../src/syntax/ast';
+import type { Expr, Stmt } from '../../src/syntax/ast';
 import type { Token } from '../../src/syntax/token';
 
 interface Execution {
@@ -1442,6 +1442,17 @@ describe('interpret: runtime errors', () => {
 
     expect(() =>
       new Interpreter(() => {}).interpret([unknown], new Map()),
+    ).toThrow('Unexpected value: {"kind":"unknown"}');
+  });
+
+  it('rejects an expression of an unknown kind', () => {
+    const unknown = { kind: 'unknown' } as unknown as Expr;
+
+    expect(() =>
+      new Interpreter(() => {}).interpret(
+        [{ kind: 'print', expression: unknown }],
+        new Map(),
+      ),
     ).toThrow('Unexpected value: {"kind":"unknown"}');
   });
 });
