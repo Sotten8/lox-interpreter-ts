@@ -1,11 +1,5 @@
 export const SKIPPED: ReadonlyMap<string, string> = new Map([
-  ['regression/394.lox', 'needs classes (stage 4)'],
   ['benchmark', 'benchmarks print timings and are not tests'],
-  ['class/inherit_self.lox', 'needs classes (stage 4)'],
-  ['class/inherited_method.lox', 'needs classes (stage 4)'],
-  ['class/local_inherit_other.lox', 'needs classes (stage 4)'],
-  ['class/local_inherit_self.lox', 'needs classes (stage 4)'],
-  ['inheritance', 'needs classes (stage 4)'],
   ['super', 'needs classes (stage 4)'],
   ['scanning', 'needs the token dump mode (not in MVP)'],
   ['expressions', 'needs the AST dump and bare expression modes (not in MVP)'],
