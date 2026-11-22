@@ -13,11 +13,15 @@ const errorsOf = (source: string): string[] => {
 const INITIALIZER = "Can't read local variable in its own initializer.";
 const DUPLICATE = 'Already a variable with this name in this scope.';
 const TOP_LEVEL_RETURN = "Can't return from top-level code.";
+const THIS_OUTSIDE_CLASS = "Can't use 'this' outside of a class.";
+const INITIALIZER_RETURN = "Can't return a value from an initializer.";
 
 const depthsOf = (source: string): [string, number][] => {
   const { statements } = parse(scan(source).tokens);
   return [...resolve(statements).locals].map(([expr, depth]) => [
-    expr.name.lexeme,
+    expr.kind === 'this' || expr.kind === 'super'
+      ? expr.keyword.lexeme
+      : expr.name.lexeme,
     depth,
   ]);
 };
@@ -277,6 +281,381 @@ describe('resolve: several errors', () => {
       errorsOf(
         'var a = 1; { var b = a; fun f(c) { return b + c; } print f(1); }',
       ),
+    ).toEqual([]);
+  });
+});
+
+describe('resolve: classes', () => {
+  it('ignores a global class', () => {
+    expect(depthsOf('class A {} A;')).toEqual([]);
+  });
+
+  it('declares a class in the current block', () => {
+    expect(depthsOf('{ class A {} A; }')).toEqual([['A', 0]]);
+  });
+
+  it('declares a class inside a function', () => {
+    expect(depthsOf('fun f() { class A {} return A; }')).toEqual([['A', 0]]);
+  });
+
+  it('adds one level for a function declared after a class in a block', () => {
+    expect(depthsOf('{ class A {} fun f() { A; } }')).toEqual([['A', 1]]);
+  });
+
+  it('reports a second class with the same name in a block', () => {
+    expect(errorsOf('{ class A {} class A {} }')).toEqual([
+      `[line 1] Error at 'A': ${DUPLICATE}`,
+    ]);
+  });
+
+  it('reports a class after a variable with the same name in a block', () => {
+    expect(errorsOf('{ var A; class A {} }')).toEqual([
+      `[line 1] Error at 'A': ${DUPLICATE}`,
+    ]);
+  });
+
+  it('allows reading a class right after its declaration', () => {
+    expect(errorsOf('{ class A {} A; }')).toEqual([]);
+  });
+
+  it.each([
+    ['in global scope', 'class A {} class A {}'],
+    ['in different blocks', '{ class A {} } { class A {} }'],
+    ['in global scope and in a block', 'class A {} { class A {} }'],
+  ])('allows the same class name %s', (_, source) => {
+    expect(errorsOf(source)).toEqual([]);
+  });
+});
+
+describe('resolve: inheritance', () => {
+  it('ignores a global superclass', () => {
+    expect(depthsOf('class Animal {} class Dog < Animal {}')).toEqual([]);
+  });
+
+  it('resolves a superclass from the same block outside the class scope', () => {
+    expect(depthsOf('{ class Animal {} class Dog < Animal {} }')).toEqual([
+      ['Animal', 0],
+    ]);
+  });
+
+  it('resolves a superclass from an outer block', () => {
+    expect(depthsOf('{ class Animal {} { class Dog < Animal {} } }')).toEqual([
+      ['Animal', 1],
+    ]);
+  });
+
+  it('resolves a parameter used as a superclass', () => {
+    expect(
+      depthsOf('fun extend(Base) { class Child < Base {} return Child; }'),
+    ).toEqual([
+      ['Base', 0],
+      ['Child', 0],
+    ]);
+  });
+
+  it('allows a class to inherit from another class', () => {
+    expect(errorsOf('class Animal {} class Dog < Animal {}')).toEqual([]);
+  });
+
+  it('allows inheriting from a variable that is not a class', () => {
+    expect(errorsOf('var Animal = 1; class Dog < Animal {}')).toEqual([]);
+  });
+
+  it.each([
+    ['in global scope', 'class Loop < Loop {}'],
+    ['in a block', '{ class Loop < Loop {} }'],
+    [
+      'even when an outer class has the same name',
+      'class Loop {} { class Loop < Loop {} }',
+    ],
+  ])('reports a class inheriting from itself %s', (_, source) => {
+    expect(errorsOf(source)).toEqual([
+      "[line 1] Error at 'Loop': A class can't inherit from itself.",
+    ]);
+  });
+
+  it('reports inheriting from itself at the line of the superclass name', () => {
+    expect(errorsOf('class Loop\n<\nLoop {}')).toEqual([
+      "[line 3] Error at 'Loop': A class can't inherit from itself.",
+    ]);
+  });
+
+  it('reports a duplicate class and inheriting from itself together', () => {
+    expect(errorsOf('{ class Loop {} class Loop < Loop {} }')).toEqual([
+      `[line 1] Error at 'Loop': ${DUPLICATE}`,
+      "[line 1] Error at 'Loop': A class can't inherit from itself.",
+    ]);
+  });
+
+  it('still resolves a superclass with the name of the class', () => {
+    expect(depthsOf('{ class Loop < Loop {} }')).toEqual([['Loop', 0]]);
+  });
+
+  it('keeps the depth of this in a subclass method', () => {
+    expect(
+      depthsOf('class Animal {} class Dog < Animal { me() { return this; } }'),
+    ).toEqual([['this', 1]]);
+  });
+});
+
+describe('resolve: properties', () => {
+  it('resolves the object of a get', () => {
+    expect(depthsOf('{ var a; a.b; }')).toEqual([['a', 0]]);
+  });
+
+  it('resolves the object of a get in a chain', () => {
+    expect(depthsOf('{ var a; a.b.c; }')).toEqual([['a', 0]]);
+  });
+
+  it('resolves the object of a get that is called', () => {
+    expect(depthsOf('{ var a; a.b(); }')).toEqual([['a', 0]]);
+  });
+
+  it('does not resolve the property name of a get', () => {
+    expect(depthsOf('{ var b; var a; a.b; }')).toEqual([['a', 0]]);
+  });
+
+  it('resolves the object of a set', () => {
+    expect(depthsOf('{ var a; a.b = 1; }')).toEqual([['a', 0]]);
+  });
+
+  it('resolves the value of a set', () => {
+    expect(depthsOf('{ var a; g.b = a; }')).toEqual([['a', 0]]);
+  });
+
+  it('does not resolve the property name of a set', () => {
+    expect(depthsOf('{ var b; var a; a.b = 1; }')).toEqual([['a', 0]]);
+  });
+
+  it('adds one level for an object used inside a function', () => {
+    expect(depthsOf('{ var a; fun f() { a.b; } }')).toEqual([['a', 1]]);
+  });
+
+  it('reports a variable read in its own initializer through a get', () => {
+    expect(errorsOf('{ var a = a.b; }')).toEqual([
+      `[line 1] Error at 'a': ${INITIALIZER}`,
+    ]);
+  });
+
+  it('reports a variable read in its own initializer through a set value', () => {
+    expect(errorsOf('{ var a = g.b = a; }')).toEqual([
+      `[line 1] Error at 'a': ${INITIALIZER}`,
+    ]);
+  });
+});
+
+describe('resolve: methods', () => {
+  it('resolves this one level up from a method body', () => {
+    expect(depthsOf('class A { m() { this; } }')).toEqual([['this', 1]]);
+  });
+
+  it('adds a level for this inside a block of a method', () => {
+    expect(depthsOf('class A { m() { { this; } } }')).toEqual([['this', 2]]);
+  });
+
+  it('adds a level for this inside a function nested in a method', () => {
+    expect(depthsOf('class A { m() { fun f() { this; } } }')).toEqual([
+      ['this', 2],
+    ]);
+  });
+
+  it('gives every use of this its own entry', () => {
+    expect(depthsOf('class A { m() { this; this; } }')).toEqual([
+      ['this', 1],
+      ['this', 1],
+    ]);
+  });
+
+  it('resolves this as the object of a get', () => {
+    expect(depthsOf('class A { m() { this.x; } }')).toEqual([['this', 1]]);
+  });
+
+  it('resolves this as the object of a set', () => {
+    expect(depthsOf('class A { m() { this.x = 1; } }')).toEqual([['this', 1]]);
+  });
+
+  it('keeps a parameter at depth 0 and this at depth 1', () => {
+    expect(depthsOf('class A { m(a) { a; this; } }')).toEqual([
+      ['a', 0],
+      ['this', 1],
+    ]);
+  });
+
+  it('reads a variable of the enclosing block from a method', () => {
+    expect(depthsOf('{ var v; class A { m() { v; } } }')).toEqual([['v', 2]]);
+  });
+
+  it('reads the class name from a method inside a block', () => {
+    expect(depthsOf('{ class A { m() { A; } } }')).toEqual([['A', 2]]);
+  });
+
+  it('does not see another method by its bare name', () => {
+    expect(depthsOf('class A { m() {} n() { m; } }')).toEqual([]);
+  });
+
+  it('allows return with a value in a method', () => {
+    expect(errorsOf('class A { m() { return 1; } }')).toEqual([]);
+  });
+
+  it('still rejects return at top level after a class', () => {
+    expect(errorsOf('class A { m() {} } return 1;')).toEqual([
+      `[line 1] Error at 'return': ${TOP_LEVEL_RETURN}`,
+    ]);
+  });
+});
+
+describe('resolve: this outside a class', () => {
+  it.each([
+    ['this printed at the top level', 'print this;'],
+    ['this in a block at the top level', '{ var copy = this; }'],
+    ['this in a function outside a class', 'fun show() { print this; }'],
+    [
+      'this in a function nested in another function',
+      'fun outer() { fun inner() { return this; } }',
+    ],
+    ['this after a class has ended', 'class A { m() {} } print this;'],
+    [
+      'this in a function declared after a class',
+      'class A {} fun f() { return this; }',
+    ],
+  ])('reports %s', (_, source) => {
+    expect(errorsOf(source)).toEqual([
+      `[line 1] Error at 'this': ${THIS_OUTSIDE_CLASS}`,
+    ]);
+  });
+
+  it.each([
+    [
+      'this in a function nested in a method',
+      'class A { m() { fun f() { return this; } } }',
+    ],
+    [
+      'this in a method of a class declared in a function',
+      'fun make() { class A { m() { return this; } } }',
+    ],
+    [
+      'this in a method after an inner class has ended',
+      'class A { m() { class B { n() { return this; } } return this; } }',
+    ],
+  ])('allows %s', (_, source) => {
+    expect(errorsOf(source)).toEqual([]);
+  });
+
+  it('reports the line of this', () => {
+    expect(errorsOf('var a = 1;\n\nprint this;')).toEqual([
+      `[line 3] Error at 'this': ${THIS_OUTSIDE_CLASS}`,
+    ]);
+  });
+
+  it('reports every use of this outside a class', () => {
+    expect(errorsOf('print this == this;')).toHaveLength(2);
+  });
+});
+
+describe('resolve: initializers', () => {
+  it.each([
+    [
+      'a value returned from init inside an if',
+      'class Point { init(x) { if (x) return x; } }',
+    ],
+    ['this returned from init', 'class Box { init() { return this; } }'],
+    [
+      'a value returned from init declared after another method',
+      'class Box { show() { return 1; } init() { return 2; } }',
+    ],
+  ])('reports %s', (_, source) => {
+    expect(errorsOf(source)).toEqual([
+      `[line 1] Error at 'return': ${INITIALIZER_RETURN}`,
+    ]);
+  });
+
+  it.each([
+    ['a bare return in init', 'class Gate { init() { return; } }'],
+    [
+      'a value returned from a function inside init',
+      'class Box { init() { fun helper() { return 3; } } }',
+    ],
+    [
+      'a value returned from a method after init',
+      'class Box { init() {} size() { return 3; } }',
+    ],
+    [
+      'a value returned from a function named init outside a class',
+      'fun init() { return 1; }',
+    ],
+  ])('allows %s', (_, source) => {
+    expect(errorsOf(source)).toEqual([]);
+  });
+
+  it('reports the line of the return', () => {
+    expect(
+      errorsOf('class Point {\n  init() {\n    return 0;\n  }\n}'),
+    ).toEqual([`[line 3] Error at 'return': ${INITIALIZER_RETURN}`]);
+  });
+
+  it('still resolves the value returned from init', () => {
+    expect(depthsOf('class Point { init(x) { return x; } }')).toEqual([
+      ['x', 0],
+    ]);
+  });
+});
+
+describe('resolve: super', () => {
+  const SUPER_OUTSIDE_CLASS = "Can't use 'super' outside of a class.";
+  const SUPER_NO_SUPERCLASS =
+    "Can't use 'super' in a class with no superclass.";
+
+  it('resolves super two scopes above a method body', () => {
+    expect(
+      depthsOf('class A {} class B < A { m() { return super.m; } }'),
+    ).toEqual([['super', 2]]);
+  });
+
+  it('puts the super scope between the class and this', () => {
+    expect(
+      depthsOf('{ class A {} class B < A { m() { B; return this; } } }'),
+    ).toEqual([
+      ['A', 0],
+      ['B', 3],
+      ['this', 1],
+    ]);
+  });
+
+  it('closes the super scope after the class', () => {
+    expect(depthsOf('{ class A {} class B < A {} B; }')).toEqual([
+      ['A', 0],
+      ['B', 0],
+    ]);
+  });
+
+  it('opens no super scope for a class without a superclass', () => {
+    expect(depthsOf('{ class A { m() { A; } } }')).toEqual([['A', 2]]);
+  });
+
+  it.each([
+    ['at the top level', 'super.m;'],
+    ['after a subclass has ended', 'class A {} class B < A {} super.m;'],
+  ])('reports super %s', (_, source) => {
+    expect(errorsOf(source)).toEqual([
+      `[line 1] Error at 'super': ${SUPER_OUTSIDE_CLASS}`,
+    ]);
+  });
+
+  it.each([
+    ['in a class without a superclass', 'class A { m() { super.m; } }'],
+    [
+      'in a class without a superclass inside a subclass method',
+      'class A {} class B < A { m() { class C { n() { super.m; } } } }',
+    ],
+  ])('reports super %s', (_, source) => {
+    expect(errorsOf(source)).toEqual([
+      `[line 1] Error at 'super': ${SUPER_NO_SUPERCLASS}`,
+    ]);
+  });
+
+  it('allows super in a subclass method after an inner class has ended', () => {
+    expect(
+      errorsOf('class A {} class B < A { m() { class C {} return super.m; } }'),
     ).toEqual([]);
   });
 });

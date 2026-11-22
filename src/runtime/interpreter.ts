@@ -4,8 +4,12 @@ import type {
   UnaryExpr,
   BinaryExpr,
   CallExpr,
+  GetExpr,
   LogicalExpr,
+  SetExpr,
   Stmt,
+  SuperExpr,
+  ThisExpr,
   VariableExpr,
 } from '../syntax/ast';
 import type { Locals } from '../resolver/resolver';
@@ -20,6 +24,7 @@ import {
   NativeFunction,
   ReturnSignal,
 } from './callable';
+import { LoxClass, LoxInstance } from './lox-class';
 
 export type Output = (line: string) => void;
 
@@ -138,6 +143,36 @@ export class Interpreter {
           new LoxFunction(stmt, this.environment),
         );
         return;
+      case 'class': {
+        let superclass: LoxClass | null = null;
+        if (stmt.superclass !== null) {
+          const value = this.evaluate(stmt.superclass);
+          if (!(value instanceof LoxClass)) {
+            throw new RuntimeError(
+              stmt.superclass.name.line,
+              'Superclass must be a class.',
+            );
+          }
+          superclass = value;
+        }
+        let closure = this.environment;
+        if (superclass !== null) {
+          closure = new Environment(this.environment);
+          closure.define('super', superclass);
+        }
+        const methods = new Map<string, LoxFunction>();
+        for (const method of stmt.methods) {
+          methods.set(
+            method.name.lexeme,
+            new LoxFunction(method, closure, method.name.lexeme === 'init'),
+          );
+        }
+        this.environment.define(
+          stmt.name.lexeme,
+          new LoxClass(stmt.name.lexeme, methods, superclass),
+        );
+        return;
+      }
       case 'return':
         throw new ReturnSignal(
           stmt.value === null ? null : this.evaluate(stmt.value),
@@ -172,20 +207,63 @@ export class Interpreter {
       case 'logical':
         return this.evaluateLogical(expr);
       case 'variable':
-        return this.lookUpVariable(expr);
+        return this.lookUpVariable(expr.name, expr);
       case 'assign':
         return this.evaluateAssign(expr);
       case 'call':
         return this.evaluateCall(expr);
+      case 'get':
+        return this.evaluateGet(expr);
+      case 'set':
+        return this.evaluateSet(expr);
+      case 'this':
+        return this.lookUpVariable(expr.keyword, expr);
+      case 'super':
+        return this.evaluateSuper(expr);
     }
   }
 
-  private lookUpVariable(expr: VariableExpr): LoxValue {
+  private evaluateSuper(expr: SuperExpr): LoxValue {
     const distance = this.locals.get(expr);
     if (distance === undefined) {
-      return this.globals.get(expr.name);
+      throw new Error("Resolver bug: 'super' is not resolved.");
     }
-    return this.environment.getAt(distance, expr.name.lexeme);
+    const superclass = this.environment.getAt(distance, 'super') as LoxClass;
+    const object = this.environment.getAt(distance - 1, 'this') as LoxInstance;
+    const method = superclass.findMethod(expr.method.lexeme);
+    if (method === undefined) {
+      throw new RuntimeError(
+        expr.method.line,
+        `Undefined property '${expr.method.lexeme}'.`,
+      );
+    }
+    return method.bind(object);
+  }
+
+  private evaluateGet(expr: GetExpr): LoxValue {
+    const object = this.evaluate(expr.object);
+    if (!(object instanceof LoxInstance)) {
+      throw new RuntimeError(expr.name.line, 'Only instances have properties.');
+    }
+    return object.get(expr.name);
+  }
+
+  private evaluateSet(expr: SetExpr): LoxValue {
+    const object = this.evaluate(expr.object);
+    if (!(object instanceof LoxInstance)) {
+      throw new RuntimeError(expr.name.line, 'Only instances have fields.');
+    }
+    const value = this.evaluate(expr.value);
+    object.set(expr.name, value);
+    return value;
+  }
+
+  private lookUpVariable(name: Token, expr: VariableExpr | ThisExpr): LoxValue {
+    const distance = this.locals.get(expr);
+    if (distance === undefined) {
+      return this.globals.get(name);
+    }
+    return this.environment.getAt(distance, name.lexeme);
   }
 
   private evaluateAssign(expr: AssignExpr): LoxValue {

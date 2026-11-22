@@ -29,6 +29,9 @@ const errorOf = (source: string): string | null => {
   return error === null ? null : formatRuntimeError(error);
 };
 
+const withInstance = (body: string): string =>
+  `class Box {} var box = Box(); ${body}`;
+
 const expectPrinted = (cases: [string, string][]): void => {
   for (const [source, expected] of cases) {
     expect(outputOf(`print ${source};`), source).toEqual([expected]);
@@ -508,6 +511,776 @@ describe('interpret: call depth', () => {
       interpret('fun boom() { -"s"; } fun a() { boom(); } a();'),
     ).not.toBeNull();
     expect(interpret('fun g() {} fun f() { g(); } f();')).toBeNull();
+  });
+});
+
+describe('interpret: classes', () => {
+  it('prints a class by its name', () => {
+    expect(outputOf('class Box {} print Box;')).toEqual(['Box']);
+  });
+
+  it('prints an instance as the name of its class and "instance"', () => {
+    expect(outputOf('class Box {} print Box();')).toEqual(['Box instance']);
+  });
+
+  it('creates a new instance on every call', () => {
+    expect(outputOf('class Box {} print Box() == Box();')).toEqual(['false']);
+  });
+
+  it('equals an instance to itself', () => {
+    expect(
+      outputOf('class Box {} var a = Box(); var b = a; print a == b;'),
+    ).toEqual(['true']);
+  });
+
+  it('does not equal a class to its instance', () => {
+    expect(outputOf('class Box {} print Box == Box();')).toEqual(['false']);
+  });
+
+  it('stores a class in a variable', () => {
+    expect(outputOf('class Box {} var B = Box; print B;')).toEqual(['Box']);
+  });
+
+  it('creates an instance through a variable that holds a class', () => {
+    expect(outputOf('class Box {} var B = Box; print B();')).toEqual([
+      'Box instance',
+    ]);
+  });
+
+  it('passes a class to a function that creates an instance', () => {
+    expect(
+      outputOf('class Box {} fun make(c) { return c(); } print make(Box);'),
+    ).toEqual(['Box instance']);
+  });
+
+  it('declares a class in a block', () => {
+    expect(outputOf('{ class Box {} print Box; }')).toEqual(['Box']);
+  });
+
+  it('hides a class declared in a block outside of it', () => {
+    expect(errorOf('{ class Box {} } print Box;')).toBe(
+      "Undefined variable 'Box'.\n[line 1]",
+    );
+  });
+
+  it('creates a different class on every call of the declaring function', () => {
+    expect(
+      outputOf('fun make() { class A {} return A; } print make() == make();'),
+    ).toEqual(['false']);
+  });
+
+  it('lets the second declaration replace a global class', () => {
+    expect(
+      outputOf('class A {} var first = A; class A {} print first == A;'),
+    ).toEqual(['false']);
+  });
+
+  it('rejects one argument for a class without init', () => {
+    expect(errorOf('class Box {} Box(1);')).toBe(
+      'Expected 0 arguments but got 1.\n[line 1]',
+    );
+  });
+});
+
+describe('interpret: fields', () => {
+  it('sets a field and reads it back', () => {
+    expect(outputOf(withInstance('box.x = "value"; print box.x;'))).toEqual([
+      'value',
+    ]);
+  });
+
+  it('returns the assigned value from a set', () => {
+    expect(outputOf(withInstance('print box.x = 1;'))).toEqual(['1']);
+  });
+
+  it('overwrites a field', () => {
+    expect(
+      outputOf(withInstance('box.x = 1; box.x = 2; print box.x;')),
+    ).toEqual(['2']);
+  });
+
+  it('keeps the fields of different instances apart', () => {
+    expect(
+      outputOf(
+        'class Box {} var a = Box(); var b = Box(); a.x = 1; b.x = 2; print a.x; print b.x;',
+      ),
+    ).toEqual(['1', '2']);
+  });
+
+  it('keeps several fields of one instance apart', () => {
+    expect(
+      outputOf(withInstance('box.a = 1; box.b = 2; print box.a; print box.b;')),
+    ).toEqual(['1', '2']);
+  });
+
+  it('stores nil in a field', () => {
+    expect(outputOf(withInstance('box.x = nil; print box.x;'))).toEqual([
+      'nil',
+    ]);
+  });
+
+  it('stores false in a field', () => {
+    expect(outputOf(withInstance('box.x = false; print box.x;'))).toEqual([
+      'false',
+    ]);
+  });
+
+  it('stores zero in a field', () => {
+    expect(outputOf(withInstance('box.x = 0; print box.x;'))).toEqual(['0']);
+  });
+
+  it('stores an empty string in a field', () => {
+    expect(outputOf(withInstance('box.x = ""; print box.x;'))).toEqual(['']);
+  });
+
+  it('stores a class in a field', () => {
+    expect(outputOf(withInstance('box.x = Box; print box.x;'))).toEqual([
+      'Box',
+    ]);
+  });
+
+  it('reads a field through a chain of instances', () => {
+    expect(
+      outputOf(withInstance('box.a = Box(); box.a.b = 1; print box.a.b;')),
+    ).toEqual(['1']);
+  });
+
+  it('lets an instance hold itself', () => {
+    expect(
+      outputOf(withInstance('box.me = box; print box.me.me == box;')),
+    ).toEqual(['true']);
+  });
+
+  it('assigns a chain of field assignments from the right', () => {
+    expect(
+      outputOf(
+        'class Box {} var a = Box(); var b = Box(); a.x = b.y = 1; print a.x; print b.y;',
+      ),
+    ).toEqual(['1', '1']);
+  });
+
+  it('assigns a field to a variable assignment', () => {
+    expect(
+      outputOf(withInstance('var v; box.x = v = 3; print box.x;')),
+    ).toEqual(['3']);
+  });
+
+  it('calls a function stored in a field', () => {
+    expect(
+      outputOf(
+        withInstance('fun f(a) { print a; } box.g = f; box.g("called");'),
+      ),
+    ).toEqual(['called']);
+  });
+
+  it('reads a field set inside a function', () => {
+    expect(
+      outputOf(withInstance('fun set() { box.x = 1; } set(); print box.x;')),
+    ).toEqual(['1']);
+  });
+
+  it('reads a field of an instance created in a local scope', () => {
+    expect(
+      outputOf(
+        'class Box {} { var local = Box(); local.x = 1; print local.x; }',
+      ),
+    ).toEqual(['1']);
+  });
+
+  it('stores a field named like a JavaScript property', () => {
+    expect(
+      outputOf(withInstance('box.constructor = 1; print box.constructor;')),
+    ).toEqual(['1']);
+  });
+
+  it('stores a field named __proto__', () => {
+    expect(
+      outputOf(withInstance('box.__proto__ = 1; print box.__proto__;')),
+    ).toEqual(['1']);
+  });
+});
+
+describe('interpret: property errors', () => {
+  it('reports an undefined property', () => {
+    expect(errorOf(withInstance('print box.x;'))).toBe(
+      "Undefined property 'x'.\n[line 1]",
+    );
+  });
+
+  it('does not take a field of another instance', () => {
+    expect(
+      errorOf('class Box {} var a = Box(); var b = Box(); a.x = 1; print b.x;'),
+    ).toBe("Undefined property 'x'.\n[line 1]");
+  });
+
+  it('does not see a JavaScript property of the field storage', () => {
+    expect(errorOf(withInstance('print box.constructor;'))).toBe(
+      "Undefined property 'constructor'.\n[line 1]",
+    );
+  });
+
+  it('reports the line of the property name for an undefined property', () => {
+    expect(errorOf(withInstance('print box\n.\nx;'))).toBe(
+      "Undefined property 'x'.\n[line 3]",
+    );
+  });
+
+  it('rejects reading a property of a number', () => {
+    expect(errorOf('var n = 1; print n.x;')).toBe(
+      'Only instances have properties.\n[line 1]',
+    );
+  });
+
+  it('rejects reading a property of a class', () => {
+    expect(errorOf('class Box {} print Box.x;')).toBe(
+      'Only instances have properties.\n[line 1]',
+    );
+  });
+
+  it('reports the line of the property name for a non-instance', () => {
+    expect(errorOf('var n = 1;\nn\n.\nx;')).toBe(
+      'Only instances have properties.\n[line 4]',
+    );
+  });
+
+  it('rejects setting a field on a number', () => {
+    expect(errorOf('var n = 1; n.x = 2;')).toBe(
+      'Only instances have fields.\n[line 1]',
+    );
+  });
+
+  it('rejects setting a field on a class', () => {
+    expect(errorOf('class Box {} Box.x = 1;')).toBe(
+      'Only instances have fields.\n[line 1]',
+    );
+  });
+
+  it('reports the line of the property name when setting on a non-instance', () => {
+    expect(errorOf('var n = 1;\nn\n.\nx = 2;')).toBe(
+      'Only instances have fields.\n[line 4]',
+    );
+  });
+
+  it('checks the object of a set before evaluating the value', () => {
+    expect(errorOf('var n = 1; n.x = missing;')).toBe(
+      'Only instances have fields.\n[line 1]',
+    );
+  });
+});
+
+describe('interpret: methods', () => {
+  it('calls a method', () => {
+    expect(
+      outputOf('class Box { hello() { print "hi"; } } Box().hello();'),
+    ).toEqual(['hi']);
+  });
+
+  it('passes arguments to a method', () => {
+    expect(
+      outputOf('class Box { add(a, b) { print a + b; } } Box().add(1, 2);'),
+    ).toEqual(['3']);
+  });
+
+  it('returns a value from a method', () => {
+    expect(
+      outputOf('class Box { two() { return 2; } } print Box().two();'),
+    ).toEqual(['2']);
+  });
+
+  it('returns nil from a method without return', () => {
+    expect(outputOf('class Box { m() {} } print Box().m();')).toEqual(['nil']);
+  });
+
+  it('reads a field through this', () => {
+    expect(
+      outputOf(
+        'class Box { show() { print this.x; } } var box = Box(); box.x = "field"; box.show();',
+      ),
+    ).toEqual(['field']);
+  });
+
+  it('writes a field through this', () => {
+    expect(
+      outputOf(
+        'class Box { put() { this.x = 5; } } var box = Box(); box.put(); print box.x;',
+      ),
+    ).toEqual(['5']);
+  });
+
+  it('returns this from a method', () => {
+    expect(
+      outputOf(
+        'class Box { me() { return this; } } var box = Box(); print box.me() == box;',
+      ),
+    ).toEqual(['true']);
+  });
+
+  it('chains method calls through this', () => {
+    expect(
+      outputOf(
+        'class Box { put(v) { this.v = v; return this; } get() { return this.v; } } print Box().put(3).get();',
+      ),
+    ).toEqual(['3']);
+  });
+
+  it('calls another method through this', () => {
+    expect(
+      outputOf('class Box { a() { this.b(); } b() { print "b"; } } Box().a();'),
+    ).toEqual(['b']);
+  });
+
+  it('calls a method recursively through this', () => {
+    expect(
+      outputOf(
+        'class Box { count(n) { if (n > 0) { print n; this.count(n - 1); } } } Box().count(2);',
+      ),
+    ).toEqual(['2', '1']);
+  });
+
+  it('keeps this for a method taken out of the instance', () => {
+    expect(
+      outputOf(
+        'class Box { show() { print this.x; } } var box = Box(); box.x = "kept"; var f = box.show; f();',
+      ),
+    ).toEqual(['kept']);
+  });
+
+  it('keeps the first instance when a method is moved to another one', () => {
+    expect(
+      outputOf(
+        'class Box { show() { print this.x; } } var a = Box(); a.x = "a"; var b = Box(); b.x = "b"; b.f = a.show; b.f();',
+      ),
+    ).toEqual(['a']);
+  });
+
+  it('shares methods between instances but not fields', () => {
+    expect(
+      outputOf(
+        'class Box { inc() { this.n = this.n + 1; } } var a = Box(); a.n = 0; var b = Box(); b.n = 10; a.inc(); b.inc(); print a.n; print b.n;',
+      ),
+    ).toEqual(['1', '11']);
+  });
+
+  it('lets a field hide a method with the same name', () => {
+    expect(
+      outputOf(
+        'class Box { m() { print "method"; } } var box = Box(); box.m = "field"; print box.m;',
+      ),
+    ).toEqual(['field']);
+  });
+
+  it('keeps methods of different classes apart', () => {
+    expect(
+      outputOf(
+        'class A { m() { print "A"; } } class B { m() { print "B"; } } A().m(); B().m();',
+      ),
+    ).toEqual(['A', 'B']);
+  });
+
+  it('closes over a variable of the enclosing block', () => {
+    expect(
+      outputOf(
+        '{ var x = "local"; class Box { m() { print x; } } Box().m(); }',
+      ),
+    ).toEqual(['local']);
+  });
+
+  it('sees a global declared after the class', () => {
+    expect(
+      outputOf('class Box { m() { print late; } } var late = "ok"; Box().m();'),
+    ).toEqual(['ok']);
+  });
+
+  it('keeps this in a function created inside a method', () => {
+    expect(
+      outputOf(
+        'class Box { make() { fun inner() { return this.v; } return inner; } } var box = Box(); box.v = "captured"; var f = box.make(); print f();',
+      ),
+    ).toEqual(['captured']);
+  });
+
+  it('refers to its own class by name', () => {
+    expect(
+      outputOf('class Box { copy() { return Box(); } } print Box().copy();'),
+    ).toEqual(['Box instance']);
+  });
+
+  it('calls a method of a class declared in a function', () => {
+    expect(
+      outputOf(
+        'fun make() { class Box { m() { return "made"; } } return Box(); } print make().m();',
+      ),
+    ).toEqual(['made']);
+  });
+
+  it('prints a bound method as a function', () => {
+    expect(outputOf('class Box { m() {} } print Box().m;')).toEqual(['<fn m>']);
+  });
+
+  it('calls a method named like a JavaScript property', () => {
+    expect(
+      outputOf('class Box { toString() { print "own"; } } Box().toString();'),
+    ).toEqual(['own']);
+  });
+
+  it('rejects too few arguments for a method', () => {
+    expect(errorOf('class Box { m(a) {} } Box().m();')).toBe(
+      'Expected 1 arguments but got 0.\n[line 1]',
+    );
+  });
+
+  it('rejects too many arguments for a method', () => {
+    expect(errorOf('class Box { m() {} } Box().m(1);')).toBe(
+      'Expected 0 arguments but got 1.\n[line 1]',
+    );
+  });
+});
+
+describe('interpret: initializers', () => {
+  it('runs init when an instance is created', () => {
+    expect(
+      outputOf('class Lamp { init() { print "on"; } } Lamp(); Lamp();'),
+    ).toEqual(['on', 'on']);
+  });
+
+  it('passes the arguments of the call to init', () => {
+    expect(
+      outputOf(
+        'class Point { init(x, y) { this.x = x; this.y = y; } } var p = Point(3, 4); print p.x * p.y;',
+      ),
+    ).toEqual(['12']);
+  });
+
+  it('returns the new instance from the call of the class', () => {
+    expect(
+      outputOf('class Lamp { init() {} } var lamp = Lamp(); print lamp;'),
+    ).toEqual(['Lamp instance']);
+  });
+
+  it('runs init on the instance that the call returns', () => {
+    expect(
+      outputOf('class Box { init() { this.size = 9; } } print Box().size;'),
+    ).toEqual(['9']);
+  });
+
+  it('rejects too few arguments for init', () => {
+    expect(errorOf('class Point { init(x, y) {} } Point();')).toBe(
+      'Expected 2 arguments but got 0.\n[line 1]',
+    );
+  });
+
+  it('rejects too many arguments for init', () => {
+    expect(errorOf('class Lamp { init() {} } Lamp(true);')).toBe(
+      'Expected 0 arguments but got 1.\n[line 1]',
+    );
+  });
+
+  it('checks the arguments before running init', () => {
+    expect(
+      execute('class Lamp { init(color) { print "ran"; } } Lamp();').lines,
+    ).toEqual([]);
+  });
+
+  it('reports a wrong number of arguments at the line of the call', () => {
+    expect(errorOf('class Point { init(x) {} }\nPoint(\n);')).toBe(
+      'Expected 1 arguments but got 0.\n[line 3]',
+    );
+  });
+
+  it('stops after a bare return in init and still returns the instance', () => {
+    expect(
+      outputOf(
+        'class Gate { init(open) { if (!open) return; print "opened"; } } print Gate(false); print Gate(true);',
+      ),
+    ).toEqual(['Gate instance', 'opened', 'Gate instance']);
+  });
+
+  it('returns this from a direct call of init', () => {
+    expect(
+      outputOf(
+        'class Box { init() {} } var box = Box(); print box.init() == box;',
+      ),
+    ).toEqual(['true']);
+  });
+
+  it('returns this from a direct call of init that ends with return', () => {
+    expect(
+      outputOf(
+        'class Gate { init() { return; } } var gate = Gate(); print gate.init() == gate;',
+      ),
+    ).toEqual(['true']);
+  });
+
+  it('runs init again on the same instance when it is called directly', () => {
+    expect(
+      outputOf(
+        'class Counter { init() { this.count = 0; } } var c = Counter(); c.count = 5; c.init(); print c.count;',
+      ),
+    ).toEqual(['0']);
+  });
+
+  it('keeps init taken out of the instance bound to it', () => {
+    expect(
+      outputOf(
+        'class Box { init() {} } var box = Box(); var reset = box.init; print reset() == box;',
+      ),
+    ).toEqual(['true']);
+  });
+
+  it('returns the value of a function declared inside init', () => {
+    expect(
+      outputOf(
+        'class Box { init() { fun helper() { return 3; } print helper(); } } Box();',
+      ),
+    ).toEqual(['3']);
+  });
+
+  it('treats a function named init outside a class as an ordinary function', () => {
+    expect(outputOf('fun init(n) { return n * 2; } print init(4);')).toEqual([
+      '8',
+    ]);
+  });
+
+  it('returns values from other methods of a class with init', () => {
+    expect(
+      outputOf(
+        'class Box { init() {} size() { return 7; } } print Box().size();',
+      ),
+    ).toEqual(['7']);
+  });
+
+  it('reports a runtime error inside init', () => {
+    expect(errorOf('class Broken { init() { -"x"; } } Broken();')).toBe(
+      'Operand must be a number.\n[line 1]',
+    );
+  });
+});
+
+describe('interpret: inheritance', () => {
+  const ANIMALS =
+    'class Animal { sound() { return "..."; } legs() { return 4; } } ';
+
+  it('calls a method declared in the superclass', () => {
+    expect(
+      outputOf(`${ANIMALS}class Dog < Animal {} print Dog().legs();`),
+    ).toEqual(['4']);
+  });
+
+  it('prefers a method of the subclass over the superclass one', () => {
+    expect(
+      outputOf(
+        `${ANIMALS}class Dog < Animal { legs() { return "woof"; } } var dog = Dog(); print dog.legs();`,
+      ),
+    ).toEqual(['woof']);
+  });
+
+  it('keeps the superclass method for instances of the superclass', () => {
+    expect(
+      outputOf(
+        `${ANIMALS}class Dog < Animal { sound() { return "woof"; } } print Animal().sound();`,
+      ),
+    ).toEqual(['...']);
+  });
+
+  it('does not add subclass methods to the superclass', () => {
+    expect(
+      errorOf(`${ANIMALS}class Dog < Animal { fetch() {} } Animal().fetch();`),
+    ).toBe("Undefined property 'fetch'.\n[line 1]");
+  });
+
+  it('takes the nearest method in a chain of classes', () => {
+    expect(
+      outputOf(
+        'class A { who() { return "a"; } } class B < A { who() { return "b"; } } class C < B {} print C().who();',
+      ),
+    ).toEqual(['b']);
+  });
+
+  it('finds a method three classes up', () => {
+    expect(
+      outputOf(
+        'class A { who() { return "a"; } } class B < A {} class C < B {} class D < C {} print D().who();',
+      ),
+    ).toEqual(['a']);
+  });
+
+  it('binds an inherited method to the subclass instance', () => {
+    expect(
+      outputOf(
+        'class Base { self() { return this; } } class Child < Base {} var c = Child(); print c.self() == c; print c.self();',
+      ),
+    ).toEqual(['true', 'Child instance']);
+  });
+
+  it('looks up a method called on this from the class of the instance', () => {
+    expect(
+      outputOf(
+        'class Base { describe() { return "I am " + this.name(); } name() { return "base"; } } class Child < Base { name() { return "child"; } } print Child().describe(); print Base().describe();',
+      ),
+    ).toEqual(['I am child', 'I am base']);
+  });
+
+  it('runs an inherited init', () => {
+    expect(
+      outputOf(
+        'class Shape { init(side) { this.side = side; } } class Square < Shape {} print Square(5).side;',
+      ),
+    ).toEqual(['5']);
+  });
+
+  it('checks the arguments against an inherited init', () => {
+    expect(
+      errorOf(
+        'class Shape { init(side) {} } class Square < Shape {} Square();',
+      ),
+    ).toBe('Expected 1 arguments but got 0.\n[line 1]');
+  });
+
+  it('uses init of the subclass instead of the inherited one', () => {
+    expect(
+      outputOf(
+        'class Shape { init(a, b) { print "shape"; } } class Dot < Shape { init() { print "dot"; } } Dot();',
+      ),
+    ).toEqual(['dot']);
+  });
+
+  it('prints a subclass and its instance with its own name', () => {
+    expect(
+      outputOf(`${ANIMALS}class Dog < Animal {} print Dog; print Dog();`),
+    ).toEqual(['Dog', 'Dog instance']);
+  });
+
+  it('inherits from a class declared in the same block', () => {
+    expect(
+      outputOf(
+        '{ class Plant { grow() { return "up"; } } class Tree < Plant {} print Tree().grow(); }',
+      ),
+    ).toEqual(['up']);
+  });
+
+  it('inherits from a class passed as an argument', () => {
+    expect(
+      outputOf(
+        'fun extend(Base) { class Child < Base {} return Child; } class Plant { grow() { return "up"; } } print extend(Plant)().grow();',
+      ),
+    ).toEqual(['up']);
+  });
+
+  it('keeps the superclass taken when the class was declared', () => {
+    expect(
+      outputOf(
+        `${ANIMALS}class Dog < Animal {} Animal = nil; print Dog().legs();`,
+      ),
+    ).toEqual(['4']);
+  });
+
+  it.each([
+    ['a number', 'var Base = 3;'],
+    ['nil', 'var Base;'],
+    ['a function', 'fun Base() {}'],
+    ['an instance', 'class Animal {} var Base = Animal();'],
+  ])('rejects %s as a superclass', (_, declaration) => {
+    expect(errorOf(`${declaration} class Dog < Base {}`)).toBe(
+      'Superclass must be a class.\n[line 1]',
+    );
+  });
+
+  it('rejects a native function as a superclass', () => {
+    expect(errorOf('class Timer < clock {}')).toBe(
+      'Superclass must be a class.\n[line 1]',
+    );
+  });
+
+  it('reports a wrong superclass at the line of its name', () => {
+    expect(errorOf('var Base = 3;\nclass Dog <\nBase {}')).toBe(
+      'Superclass must be a class.\n[line 3]',
+    );
+  });
+
+  it('reports an undefined superclass', () => {
+    expect(errorOf('class Dog < Missing {}')).toBe(
+      "Undefined variable 'Missing'.\n[line 1]",
+    );
+  });
+
+  it('stops before the class is declared when the superclass is wrong', () => {
+    expect(
+      execute(
+        'print "before"; var Base = 3; class Dog < Base {} print "after";',
+      ).lines,
+    ).toEqual(['before']);
+  });
+});
+
+describe('interpret: super', () => {
+  it('calls the superclass version of an overridden method', () => {
+    expect(
+      outputOf(
+        'class Animal { sound() { return "..."; } } class Dog < Animal { sound() { return "woof " + super.sound(); } } print Dog().sound();',
+      ),
+    ).toEqual(['woof ...']);
+  });
+
+  it('runs the superclass method with this of the current instance', () => {
+    expect(
+      outputOf(
+        'class Base { label() { return this.name; } } class Child < Base { init() { this.name = "kid"; } label() { return "<" + super.label() + ">"; } } print Child().label();',
+      ),
+    ).toEqual(['<kid>']);
+  });
+
+  it('starts from the superclass of the class where super is written', () => {
+    expect(
+      outputOf(
+        'class Coin { side() { return "coin"; } } class Penny < Coin { side() { return "penny"; } show() { return super.side(); } } class OldPenny < Penny {} print OldPenny().show();',
+      ),
+    ).toEqual(['coin']);
+  });
+
+  it('finds a method two classes above through super', () => {
+    expect(
+      outputOf(
+        'class A { who() { return "a"; } } class B < A {} class C < B { who() { return "c" + super.who(); } } print C().who();',
+      ),
+    ).toEqual(['ca']);
+  });
+
+  it('keeps super in a function created inside a method', () => {
+    expect(
+      outputOf(
+        'class A { who() { return "a"; } } class B < A { who() { fun inner() { return super.who(); } return inner; } } print B().who()();',
+      ),
+    ).toEqual(['a']);
+  });
+
+  it('keeps outer variables visible in methods of a subclass', () => {
+    expect(
+      outputOf(
+        '{ var greeting = "hi"; class A {} class B < A { say() { return greeting; } } print B().say(); }',
+      ),
+    ).toEqual(['hi']);
+  });
+
+  it('does not find fields through super', () => {
+    expect(
+      errorOf(
+        'class A {} class B < A { init() { this.x = 1; } m() { return super.x; } } B().m();',
+      ),
+    ).toBe("Undefined property 'x'.\n[line 1]");
+  });
+
+  it('reports a missing method at the line of its name', () => {
+    expect(
+      errorOf(
+        'class A {}\nclass B < A { m() { super\n.\nmissing(); } }\nB().m();',
+      ),
+    ).toBe("Undefined property 'missing'.\n[line 4]");
+  });
+
+  it('fails loudly when super was not resolved', () => {
+    expect(() => execute('super.m;')).toThrow(
+      "Resolver bug: 'super' is not resolved.",
+    );
   });
 });
 

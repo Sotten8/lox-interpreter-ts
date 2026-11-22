@@ -50,6 +50,30 @@ export interface CallExpr {
   readonly args: readonly Expr[];
 }
 
+export interface GetExpr {
+  readonly kind: 'get';
+  readonly object: Expr;
+  readonly name: Token;
+}
+
+export interface SetExpr {
+  readonly kind: 'set';
+  readonly object: Expr;
+  readonly name: Token;
+  readonly value: Expr;
+}
+
+export interface ThisExpr {
+  readonly kind: 'this';
+  readonly keyword: Token;
+}
+
+export interface SuperExpr {
+  readonly kind: 'super';
+  readonly keyword: Token;
+  readonly method: Token;
+}
+
 export type Expr =
   | LiteralExpr
   | GroupingExpr
@@ -58,7 +82,11 @@ export type Expr =
   | LogicalExpr
   | VariableExpr
   | AssignExpr
-  | CallExpr;
+  | CallExpr
+  | GetExpr
+  | SetExpr
+  | ThisExpr
+  | SuperExpr;
 
 export interface ExpressionStmt {
   readonly kind: 'expression';
@@ -107,6 +135,13 @@ export interface ReturnStmt {
   readonly value: Expr | null;
 }
 
+export interface ClassStmt {
+  readonly kind: 'class';
+  readonly name: Token;
+  readonly superclass: VariableExpr | null;
+  readonly methods: readonly FunctionStmt[];
+}
+
 export type Stmt =
   | ExpressionStmt
   | PrintStmt
@@ -115,4 +150,5 @@ export type Stmt =
   | IfStmt
   | WhileStmt
   | FunctionStmt
-  | ReturnStmt;
+  | ReturnStmt
+  | ClassStmt;

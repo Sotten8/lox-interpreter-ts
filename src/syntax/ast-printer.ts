@@ -27,6 +27,14 @@ export function printExpr(expr: Expr): string {
       return `(= ${expr.name.lexeme} ${printExpr(expr.value)})`;
     case 'call':
       return `(${['call', printExpr(expr.callee), ...expr.args.map(printExpr)].join(' ')})`;
+    case 'get':
+      return `(get ${printExpr(expr.object)} ${expr.name.lexeme})`;
+    case 'set':
+      return `(set ${printExpr(expr.object)} ${expr.name.lexeme} ${printExpr(expr.value)})`;
+    case 'this':
+      return 'this';
+    case 'super':
+      return `(super ${expr.method.lexeme})`;
   }
 }
 
@@ -59,6 +67,13 @@ export function printStmt(stmt: Stmt): string {
       return stmt.value === null
         ? '(return)'
         : `(return ${printExpr(stmt.value)})`;
+    case 'class': {
+      const parts = ['class', stmt.name.lexeme];
+      if (stmt.superclass !== null) {
+        parts.push('<', stmt.superclass.name.lexeme);
+      }
+      return `(${[...parts, ...stmt.methods.map(printStmt)].join(' ')})`;
+    }
     case 'function': {
       const params = `(${stmt.params.map((param) => param.lexeme).join(' ')})`;
       return `(${['fun', stmt.name.lexeme, params, ...stmt.body.map(printStmt)].join(' ')})`;

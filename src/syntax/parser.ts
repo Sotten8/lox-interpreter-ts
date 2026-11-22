@@ -1,4 +1,4 @@
-import type { Expr, Stmt } from './ast';
+import type { Expr, FunctionStmt, Stmt, VariableExpr } from './ast';
 import { compileErrorAt, type CompileError } from '../errors';
 import type { Token, TokenType } from './token';
 
@@ -42,8 +42,11 @@ class Parser {
 
   private declaration(): Stmt | null {
     try {
+      if (this.match('CLASS')) {
+        return this.classDeclaration();
+      }
       if (this.match('FUN')) {
-        return this.functionDeclaration();
+        return this.functionDeclaration('function');
       }
       if (this.match('VAR')) {
         return this.varDeclaration();
@@ -58,15 +61,33 @@ class Parser {
     }
   }
 
-  private functionDeclaration(): Stmt {
-    const name = this.consume('IDENTIFIER', 'Expect function name.');
-    this.consume('LEFT_PAREN', "Expect '(' after function name.");
+  private classDeclaration(): Stmt {
+    const name = this.consume('IDENTIFIER', 'Expect class name.');
+    let superclass: VariableExpr | null = null;
+    if (this.match('LESS')) {
+      superclass = {
+        kind: 'variable',
+        name: this.consume('IDENTIFIER', 'Expect superclass name.'),
+      };
+    }
+    this.consume('LEFT_BRACE', "Expect '{' before class body.");
+    const methods: FunctionStmt[] = [];
+    while (!this.check('RIGHT_BRACE') && !this.isAtEnd()) {
+      methods.push(this.functionDeclaration('method'));
+    }
+    this.consume('RIGHT_BRACE', "Expect '}' after class body.");
+    return { kind: 'class', name, superclass, methods };
+  }
+
+  private functionDeclaration(kind: 'function' | 'method'): FunctionStmt {
+    const name = this.consume('IDENTIFIER', `Expect ${kind} name.`);
+    this.consume('LEFT_PAREN', `Expect '(' after ${kind} name.`);
     const params = this.commaSeparated(
       () => this.consume('IDENTIFIER', 'Expect parameter name.'),
       "Can't have more than 255 parameters.",
     );
     this.consume('RIGHT_PAREN', "Expect ')' after parameters.");
-    this.consume('LEFT_BRACE', "Expect '{' before function body.");
+    this.consume('LEFT_BRACE', `Expect '{' before ${kind} body.`);
     const body = this.block();
     return { kind: 'function', name, params, body };
   }
@@ -198,6 +219,9 @@ class Parser {
       if (expr.kind === 'variable') {
         return { kind: 'assign', name: expr.name, value };
       }
+      if (expr.kind === 'get') {
+        return { kind: 'set', object: expr.object, name: expr.name, value };
+      }
       this.error(equals, 'Invalid assignment target.');
     }
     return expr;
@@ -258,10 +282,19 @@ class Parser {
 
   private call(): Expr {
     let expr = this.primary();
-    while (this.match('LEFT_PAREN')) {
-      expr = this.finishCall(expr);
+    while (true) {
+      if (this.match('LEFT_PAREN')) {
+        expr = this.finishCall(expr);
+      } else if (this.match('DOT')) {
+        const name = this.consume(
+          'IDENTIFIER',
+          "Expect property name after '.'.",
+        );
+        expr = { kind: 'get', object: expr, name };
+      } else {
+        return expr;
+      }
     }
-    return expr;
   }
 
   private finishCall(callee: Expr): Expr {
@@ -298,6 +331,18 @@ class Parser {
     }
     if (this.match('NUMBER', 'STRING')) {
       return { kind: 'literal', value: this.previous().literal };
+    }
+    if (this.match('SUPER')) {
+      const keyword = this.previous();
+      this.consume('DOT', "Expect '.' after 'super'.");
+      const method = this.consume(
+        'IDENTIFIER',
+        'Expect superclass method name.',
+      );
+      return { kind: 'super', keyword, method };
+    }
+    if (this.match('THIS')) {
+      return { kind: 'this', keyword: this.previous() };
     }
     if (this.match('IDENTIFIER')) {
       return { kind: 'variable', name: this.previous() };

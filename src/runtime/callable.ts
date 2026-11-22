@@ -1,6 +1,7 @@
 import type { FunctionStmt } from '../syntax/ast';
 import { Environment } from './environment';
 import type { Interpreter } from './interpreter';
+import type { LoxInstance } from './lox-class';
 import type { LoxValue } from './values';
 
 export class ReturnSignal {
@@ -46,15 +47,27 @@ export class NativeFunction extends LoxCallable {
 export class LoxFunction extends LoxCallable {
   private readonly declaration: FunctionStmt;
   private readonly closure: Environment;
+  private readonly isInitializer: boolean;
 
-  constructor(declaration: FunctionStmt, closure: Environment) {
+  constructor(
+    declaration: FunctionStmt,
+    closure: Environment,
+    isInitializer = false,
+  ) {
     super();
     this.declaration = declaration;
     this.closure = closure;
+    this.isInitializer = isInitializer;
   }
 
   get arity(): number {
     return this.declaration.params.length;
+  }
+
+  bind(instance: LoxInstance): LoxFunction {
+    const environment = new Environment(this.closure);
+    environment.define('this', instance);
+    return new LoxFunction(this.declaration, environment, this.isInitializer);
   }
 
   call(interpreter: Interpreter, args: readonly LoxValue[]): LoxValue {
@@ -62,15 +75,16 @@ export class LoxFunction extends LoxCallable {
     this.declaration.params.forEach((param, index) => {
       environment.define(param.lexeme, args[index] as LoxValue);
     });
+    let result: LoxValue = null;
     try {
       interpreter.executeBlock(this.declaration.body, environment);
     } catch (error) {
-      if (error instanceof ReturnSignal) {
-        return error.value;
+      if (!(error instanceof ReturnSignal)) {
+        throw error;
       }
-      throw error;
+      result = error.value;
     }
-    return null;
+    return this.isInitializer ? this.closure.getAt(0, 'this') : result;
   }
 
   toString(): string {

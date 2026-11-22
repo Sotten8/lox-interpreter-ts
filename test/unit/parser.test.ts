@@ -383,6 +383,234 @@ describe('parse: return', () => {
   });
 });
 
+describe('parse: classes', () => {
+  it('parses an empty class declaration', () => {
+    expect(trees('class A {}')).toEqual(['(class A)']);
+  });
+
+  it('parses classes next to other statements', () => {
+    expect(trees('class A {} print 1; class B {}')).toEqual([
+      '(class A)',
+      '(print 1)',
+      '(class B)',
+    ]);
+  });
+
+  it('parses a class inside a block', () => {
+    expect(trees('{ class A {} }')).toEqual(['(block (class A))']);
+  });
+
+  it.each([
+    ['class {}', "[line 1] Error at '{': Expect class name."],
+    ['class 1 {}', "[line 1] Error at '1': Expect class name."],
+    ['class print {}', "[line 1] Error at 'print': Expect class name."],
+    ['class', '[line 1] Error at end: Expect class name.'],
+    ['class A', "[line 1] Error at end: Expect '{' before class body."],
+    ['class A 1', "[line 1] Error at '1': Expect '{' before class body."],
+    ['class A {', "[line 1] Error at end: Expect '}' after class body."],
+  ])('reports an error for %j', (source, message) => {
+    expect(errorsOf(source)).toEqual([message]);
+  });
+
+  it('skips a broken declaration and parses the next statement', () => {
+    expect(trees('class {} print 2;')).toEqual(['(print 2)']);
+  });
+});
+
+describe('parse: property access', () => {
+  it.each([
+    ['a.b', '(get a b)'],
+    ['a.b.c', '(get (get a b) c)'],
+    ['a.b()', '(call (get a b))'],
+    ['a().b', '(get (call a) b)'],
+    ['a.b().c', '(get (call (get a b)) c)'],
+    ['(a).b', '(get (group a) b)'],
+    ['a.b + c.d', '(+ (get a b) (get c d))'],
+  ])('parses %s', (source, tree) => {
+    expect(exprTree(source)).toBe(tree);
+  });
+
+  it('handles a dot priority higher than unary minus', () => {
+    expect(exprTree('-a.b')).toBe('(- (get a b))');
+  });
+
+  it('handles a dot priority higher than a call argument list', () => {
+    expect(exprTree('f(a.b, c.d)')).toBe('(call f (get a b) (get c d))');
+  });
+
+  it.each([
+    ['a.;', "[line 1] Error at ';': Expect property name after '.'."],
+    ['a.1;', "[line 1] Error at '1': Expect property name after '.'."],
+    ['a.(b);', "[line 1] Error at '(': Expect property name after '.'."],
+    ['a.print;', "[line 1] Error at 'print': Expect property name after '.'."],
+    ['a. = 1;', "[line 1] Error at '=': Expect property name after '.'."],
+    ['a.', "[line 1] Error at end: Expect property name after '.'."],
+  ])('reports an error for %j', (source, message) => {
+    expect(errorsOf(source)).toEqual([message]);
+  });
+
+  it('skips a broken property access and parses the next statement', () => {
+    expect(trees('a.; print 2;')).toEqual(['(print 2)']);
+  });
+});
+
+describe('parse: property assignment', () => {
+  it.each([
+    ['a.b = 1', '(set a b 1)'],
+    ['a.b.c = 1', '(set (get a b) c 1)'],
+    ['f().x = 1', '(set (call f) x 1)'],
+    ['a.b = 1 + 2', '(set a b (+ 1 2))'],
+    ['a.b = c.d', '(set a b (get c d))'],
+  ])('parses %s', (source, tree) => {
+    expect(exprTree(source)).toBe(tree);
+  });
+
+  it('associates to the right through two fields', () => {
+    expect(exprTree('a.b = c.d = 1')).toBe('(set a b (set c d 1))');
+  });
+
+  it('associates to the right through a field and a variable', () => {
+    expect(exprTree('a.b = c = 1')).toBe('(set a b (= c 1))');
+  });
+
+  it('allows a field assignment as the value of a variable assignment', () => {
+    expect(exprTree('a = b.c = 1')).toBe('(= a (set b c 1))');
+  });
+
+  it.each([
+    ['a.b() = 1;', "[line 1] Error at '=': Invalid assignment target."],
+    ['(a.b) = 1;', "[line 1] Error at '=': Invalid assignment target."],
+    ['a.b + c = 1;', "[line 1] Error at '=': Invalid assignment target."],
+  ])('rejects the target in %j', (source, message) => {
+    expect(errorsOf(source)).toEqual([message]);
+  });
+});
+
+describe('parse: methods', () => {
+  it.each([
+    ['class A { m() {} }', '(class A (fun m ()))'],
+    ['class A { m(a, b) { print a; } }', '(class A (fun m (a b) (print a)))'],
+    ['class A { m() {} n() {} }', '(class A (fun m ()) (fun n ()))'],
+    ['class A { m() { return 1; } }', '(class A (fun m () (return 1)))'],
+    ['class A { m() { fun f() {} } }', '(class A (fun m () (fun f ())))'],
+  ])('parses %s', (source, tree) => {
+    expect(trees(source)).toEqual([tree]);
+  });
+
+  it('parses a class with methods next to other statements', () => {
+    expect(trees('class A { m() {} } print 1;')).toEqual([
+      '(class A (fun m ()))',
+      '(print 1)',
+    ]);
+  });
+
+  it.each([
+    ['class A { 1() {} }', "[line 1] Error at '1': Expect method name."],
+    ['class A { fun m() {} }', "[line 1] Error at 'fun': Expect method name."],
+    ['class A { m }', "[line 1] Error at '}': Expect '(' after method name."],
+    [
+      'class A { m() }',
+      "[line 1] Error at '}': Expect '{' before method body.",
+    ],
+    ['class A { m() {}', "[line 1] Error at end: Expect '}' after class body."],
+  ])('reports an error for %j', (source, message) => {
+    expect(errorsOf(source)).toEqual([message]);
+  });
+});
+
+describe('parse: inheritance', () => {
+  it.each([
+    ['class Dog < Animal {}', '(class Dog < Animal)'],
+    ['class Dog < Animal { bark() {} }', '(class Dog < Animal (fun bark ()))'],
+  ])('parses %s', (source, tree) => {
+    expect(trees(source)).toEqual([tree]);
+  });
+
+  it('keeps a class without a superclass', () => {
+    const [statement] = parseSource('class Animal {}').statements;
+
+    expect(statement?.kind === 'class' && statement.superclass).toBeNull();
+  });
+
+  it('wraps the superclass name in a variable expression', () => {
+    const [statement] = parseSource('class Dog < Animal {}').statements;
+
+    expect(statement?.kind === 'class' && statement.superclass).toMatchObject({
+      kind: 'variable',
+      name: { lexeme: 'Animal', type: 'IDENTIFIER' },
+    });
+  });
+
+  it.each([
+    ['class Dog < {}', "[line 1] Error at '{': Expect superclass name."],
+    ['class Dog <', '[line 1] Error at end: Expect superclass name.'],
+    [
+      'class Dog < pets.Animal {}',
+      "[line 1] Error at '.': Expect '{' before class body.",
+    ],
+    [
+      'class Dog > Animal {}',
+      "[line 1] Error at '>': Expect '{' before class body.",
+    ],
+  ])('reports an error for %j', (source, message) => {
+    expect(errorsOf(source)).toEqual([message]);
+  });
+});
+
+describe('parse: super', () => {
+  it.each([
+    ['super.speak', '(super speak)'],
+    ['super.speak()', '(call (super speak))'],
+  ])('parses %s', (source, tree) => {
+    expect(exprTree(source)).toBe(tree);
+  });
+
+  it('keeps the super keyword and the method name in the node', () => {
+    const [statement] = parseSource('super.speak;').statements;
+
+    expect(
+      statement?.kind === 'expression' && statement.expression,
+    ).toMatchObject({
+      kind: 'super',
+      keyword: { lexeme: 'super', type: 'SUPER' },
+      method: { lexeme: 'speak', type: 'IDENTIFIER' },
+    });
+  });
+
+  it.each([
+    ['super(1);', "[line 1] Error at '(': Expect '.' after 'super'."],
+    ['super.7;', "[line 1] Error at '7': Expect superclass method name."],
+    ['super.speak = 1;', "[line 1] Error at '=': Invalid assignment target."],
+  ])('reports an error for %j', (source, message) => {
+    expect(errorsOf(source)).toEqual([message]);
+  });
+});
+
+describe('parse: this', () => {
+  it.each([
+    ['this', 'this'],
+    ['this.x', '(get this x)'],
+    ['this.x = 1', '(set this x 1)'],
+    ['this.m()', '(call (get this m))'],
+    ['this + 1', '(+ this 1)'],
+    ['f(this)', '(call f this)'],
+  ])('parses %s', (source, tree) => {
+    expect(exprTree(source)).toBe(tree);
+  });
+
+  it('parses this inside a method', () => {
+    expect(trees('class A { m() { return this; } }')).toEqual([
+      '(class A (fun m () (return this)))',
+    ]);
+  });
+
+  it('rejects this as an assignment target', () => {
+    expect(errorsOf('this = 1;')).toEqual([
+      "[line 1] Error at '=': Invalid assignment target.",
+    ]);
+  });
+});
+
 describe('parse: errors and recovery', () => {
   it.each([
     ['1 + ;', ["[line 1] Error at ';': Expect expression."]],
