@@ -15,8 +15,8 @@ import type {
 import type { Locals } from '../resolver/resolver';
 import type { Token, TokenType } from '../syntax/token';
 import { isEqual, isTruthy, stringify, type LoxValue } from './values';
-import { RuntimeError } from '../errors';
-import { assertNever } from '../assert-never';
+import { RuntimeError } from '../common/errors';
+import { assertNever } from '../common/assert-never';
 import { Environment } from './environment';
 import {
   LoxCallable,

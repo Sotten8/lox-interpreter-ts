@@ -1,4 +1,4 @@
-import type { Token } from './syntax/token';
+import type { Token } from '../syntax/token';
 
 export interface CompileError {
   readonly line: number;

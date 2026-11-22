@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatCompileError } from '../../src/errors';
+import { formatCompileError } from '../../src/common/errors';
 import { resolve } from '../../src/resolver/resolver';
 import { parse } from '../../src/syntax/parser';
 import { scan } from '../../src/syntax/scanner';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RuntimeError } from '../../src/errors';
+import { RuntimeError } from '../../src/common/errors';
 import type { FunctionStmt } from '../../src/syntax/ast';
 import type { Token } from '../../src/syntax/token';
 import { LoxCallable, LoxFunction } from '../../src/runtime/callable';

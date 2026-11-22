@@ -2,7 +2,7 @@ import {
   formatCompileError,
   formatRuntimeError,
   type CompileError,
-} from './errors';
+} from './common/errors';
 import { resolve } from './resolver/resolver';
 import { Interpreter } from './runtime/interpreter';
 import { printStmt } from './syntax/ast-printer';

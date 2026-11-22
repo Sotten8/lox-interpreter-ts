@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { formatCompileError } from '../../src/errors';
+import { formatCompileError } from '../../src/common/errors';
 import { scan } from '../../src/syntax/scanner';
 import type { TokenType } from '../../src/syntax/token';
 import { parseExpectations } from '../official/expectations';

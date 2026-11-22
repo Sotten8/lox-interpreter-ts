@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { formatRuntimeError, type RuntimeError } from '../../src/errors';
+import { formatRuntimeError, type RuntimeError } from '../../src/common/errors';
 import { resolve } from '../../src/resolver/resolver';
 import { Interpreter } from '../../src/runtime/interpreter';
 import { parse } from '../../src/syntax/parser';

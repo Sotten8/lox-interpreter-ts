@@ -1,4 +1,4 @@
-import { RuntimeError } from '../errors';
+import { RuntimeError } from '../common/errors';
 import type { Token } from '../syntax/token';
 import type { LoxValue } from './values';
 

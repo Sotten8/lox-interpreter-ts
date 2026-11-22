@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatRuntimeError, RuntimeError } from '../../src/errors';
+import { formatRuntimeError, RuntimeError } from '../../src/common/errors';
 import { Environment } from '../../src/runtime/environment';
 import type { Token } from '../../src/syntax/token';
 

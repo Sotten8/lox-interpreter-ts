@@ -1,4 +1,4 @@
-import { assertNever } from '../assert-never';
+import { assertNever } from '../common/assert-never';
 import type { Expr, LiteralValue, Stmt } from './ast';
 
 function printLiteral(value: LiteralValue): string {
