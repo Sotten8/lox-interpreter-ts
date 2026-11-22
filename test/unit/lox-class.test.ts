@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { RuntimeError } from '../../src/errors';
+import type { FunctionStmt } from '../../src/syntax/ast';
 import type { Token } from '../../src/syntax/token';
 import { LoxCallable, LoxFunction } from '../../src/runtime/callable';
 import { Environment } from '../../src/runtime/environment';
@@ -117,7 +118,7 @@ describe('LoxInstance', () => {
   });
 });
 
-const methodNamed = (name: string, params = ''): LoxFunction => {
+const declarationOf = (name: string, params: string): FunctionStmt => {
   const { statements } = parse(
     scan(`class Box { ${name}(${params}) {} }`).tokens,
   );
@@ -129,8 +130,14 @@ const methodNamed = (name: string, params = ''): LoxFunction => {
   if (method === undefined) {
     throw new Error('Expected a method.');
   }
-  return new LoxFunction(method, new Environment());
+  return method;
 };
+
+const methodNamed = (name: string, params = ''): LoxFunction =>
+  new LoxFunction(declarationOf(name, params), new Environment());
+
+const initializer = (params = ''): LoxFunction =>
+  new LoxFunction(declarationOf('init', params), new Environment(), true);
 
 const classWith = (...methods: [string, LoxFunction][]): LoxClass =>
   new LoxClass('Box', new Map(methods));
@@ -152,6 +159,30 @@ describe('LoxClass methods', () => {
 
   it('does not find a method named like a JavaScript property', () => {
     expect(new LoxClass('Box').findMethod('toString')).toBeUndefined();
+  });
+});
+
+describe('LoxClass init', () => {
+  it('takes the arity of init', () => {
+    expect(classWith(['init', initializer('a, b')]).arity).toBe(2);
+  });
+
+  it('ignores the arity of other methods', () => {
+    expect(classWith(['m', methodNamed('m', 'a')]).arity).toBe(0);
+  });
+
+  it('creates an instance of the class when it has init', () => {
+    const loxClass = classWith(['init', initializer()]);
+    const instance = loxClass.call(interpreter, []) as LoxInstance;
+
+    expect(instance.loxClass).toBe(loxClass);
+  });
+
+  it('returns the instance from a direct call of init', () => {
+    const instance = new LoxInstance(classWith(['init', initializer()]));
+    const bound = instance.get(identifier('init')) as LoxFunction;
+
+    expect(bound.call(interpreter, [])).toBe(instance);
   });
 });
 
@@ -184,6 +215,13 @@ describe('LoxInstance methods', () => {
     instance.set(identifier('m'), 1);
 
     expect(instance.get(identifier('m'))).toBe(1);
+  });
+
+  it('keeps a method that is not init from returning the instance', () => {
+    const instance = new LoxInstance(classWith(['m', methodNamed('m')]));
+    const bound = instance.get(identifier('m')) as LoxFunction;
+
+    expect(bound.call(interpreter, [])).toBeNull();
   });
 
   it('reports a name that is neither a field nor a method', () => {

@@ -936,6 +936,126 @@ describe('interpret: methods', () => {
   });
 });
 
+describe('interpret: initializers', () => {
+  it('runs init when an instance is created', () => {
+    expect(
+      outputOf('class Lamp { init() { print "on"; } } Lamp(); Lamp();'),
+    ).toEqual(['on', 'on']);
+  });
+
+  it('passes the arguments of the call to init', () => {
+    expect(
+      outputOf(
+        'class Point { init(x, y) { this.x = x; this.y = y; } } var p = Point(3, 4); print p.x * p.y;',
+      ),
+    ).toEqual(['12']);
+  });
+
+  it('returns the new instance from the call of the class', () => {
+    expect(
+      outputOf('class Lamp { init() {} } var lamp = Lamp(); print lamp;'),
+    ).toEqual(['Lamp instance']);
+  });
+
+  it('runs init on the instance that the call returns', () => {
+    expect(
+      outputOf('class Box { init() { this.size = 9; } } print Box().size;'),
+    ).toEqual(['9']);
+  });
+
+  it('rejects too few arguments for init', () => {
+    expect(errorOf('class Point { init(x, y) {} } Point();')).toBe(
+      'Expected 2 arguments but got 0.\n[line 1]',
+    );
+  });
+
+  it('rejects too many arguments for init', () => {
+    expect(errorOf('class Lamp { init() {} } Lamp(true);')).toBe(
+      'Expected 0 arguments but got 1.\n[line 1]',
+    );
+  });
+
+  it('checks the arguments before running init', () => {
+    expect(
+      execute('class Lamp { init(color) { print "ran"; } } Lamp();').lines,
+    ).toEqual([]);
+  });
+
+  it('reports a wrong number of arguments at the line of the call', () => {
+    expect(errorOf('class Point { init(x) {} }\nPoint(\n);')).toBe(
+      'Expected 1 arguments but got 0.\n[line 3]',
+    );
+  });
+
+  it('stops after a bare return in init and still returns the instance', () => {
+    expect(
+      outputOf(
+        'class Gate { init(open) { if (!open) return; print "opened"; } } print Gate(false); print Gate(true);',
+      ),
+    ).toEqual(['Gate instance', 'opened', 'Gate instance']);
+  });
+
+  it('returns this from a direct call of init', () => {
+    expect(
+      outputOf(
+        'class Box { init() {} } var box = Box(); print box.init() == box;',
+      ),
+    ).toEqual(['true']);
+  });
+
+  it('returns this from a direct call of init that ends with return', () => {
+    expect(
+      outputOf(
+        'class Gate { init() { return; } } var gate = Gate(); print gate.init() == gate;',
+      ),
+    ).toEqual(['true']);
+  });
+
+  it('runs init again on the same instance when it is called directly', () => {
+    expect(
+      outputOf(
+        'class Counter { init() { this.count = 0; } } var c = Counter(); c.count = 5; c.init(); print c.count;',
+      ),
+    ).toEqual(['0']);
+  });
+
+  it('keeps init taken out of the instance bound to it', () => {
+    expect(
+      outputOf(
+        'class Box { init() {} } var box = Box(); var reset = box.init; print reset() == box;',
+      ),
+    ).toEqual(['true']);
+  });
+
+  it('returns the value of a function declared inside init', () => {
+    expect(
+      outputOf(
+        'class Box { init() { fun helper() { return 3; } print helper(); } } Box();',
+      ),
+    ).toEqual(['3']);
+  });
+
+  it('treats a function named init outside a class as an ordinary function', () => {
+    expect(outputOf('fun init(n) { return n * 2; } print init(4);')).toEqual([
+      '8',
+    ]);
+  });
+
+  it('returns values from other methods of a class with init', () => {
+    expect(
+      outputOf(
+        'class Box { init() {} size() { return 7; } } print Box().size();',
+      ),
+    ).toEqual(['7']);
+  });
+
+  it('reports a runtime error inside init', () => {
+    expect(errorOf('class Broken { init() { -"x"; } } Broken();')).toBe(
+      'Operand must be a number.\n[line 1]',
+    );
+  });
+});
+
 describe('interpret: binding of variables', () => {
   it('uses the variable declared above the function, not below', () => {
     expect(

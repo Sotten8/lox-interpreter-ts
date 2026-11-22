@@ -14,6 +14,7 @@ const INITIALIZER = "Can't read local variable in its own initializer.";
 const DUPLICATE = 'Already a variable with this name in this scope.';
 const TOP_LEVEL_RETURN = "Can't return from top-level code.";
 const THIS_OUTSIDE_CLASS = "Can't use 'this' outside of a class.";
+const INITIALIZER_RETURN = "Can't return a value from an initializer.";
 
 const depthsOf = (source: string): [string, number][] => {
   const { statements } = parse(scan(source).tokens);
@@ -475,6 +476,54 @@ describe('resolve: this outside a class', () => {
 
   it('reports every use of this outside a class', () => {
     expect(errorsOf('print this == this;')).toHaveLength(2);
+  });
+});
+
+describe('resolve: initializers', () => {
+  it.each([
+    [
+      'a value returned from init inside an if',
+      'class Point { init(x) { if (x) return x; } }',
+    ],
+    ['this returned from init', 'class Box { init() { return this; } }'],
+    [
+      'a value returned from init declared after another method',
+      'class Box { show() { return 1; } init() { return 2; } }',
+    ],
+  ])('reports %s', (_, source) => {
+    expect(errorsOf(source)).toEqual([
+      `[line 1] Error at 'return': ${INITIALIZER_RETURN}`,
+    ]);
+  });
+
+  it.each([
+    ['a bare return in init', 'class Gate { init() { return; } }'],
+    [
+      'a value returned from a function inside init',
+      'class Box { init() { fun helper() { return 3; } } }',
+    ],
+    [
+      'a value returned from a method after init',
+      'class Box { init() {} size() { return 3; } }',
+    ],
+    [
+      'a value returned from a function named init outside a class',
+      'fun init() { return 1; }',
+    ],
+  ])('allows %s', (_, source) => {
+    expect(errorsOf(source)).toEqual([]);
+  });
+
+  it('reports the line of the return', () => {
+    expect(
+      errorsOf('class Point {\n  init() {\n    return 0;\n  }\n}'),
+    ).toEqual([`[line 3] Error at 'return': ${INITIALIZER_RETURN}`]);
+  });
+
+  it('still resolves the value returned from init', () => {
+    expect(depthsOf('class Point { init(x) { return x; } }')).toEqual([
+      ['x', 0],
+    ]);
   });
 });
 
