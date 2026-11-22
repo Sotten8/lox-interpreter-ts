@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { RuntimeError } from '../../src/common/errors';
 import type { FunctionStmt } from '../../src/syntax/ast';
 import type { Token } from '../../src/syntax/token';
-import { LoxCallable, LoxFunction } from '../../src/runtime/callable';
-import { Environment } from '../../src/runtime/environment';
+import { LoxCallable, LoxFunction } from '../../src/interpreter/callable';
+import { Environment } from '../../src/interpreter/environment';
 import { parse } from '../../src/syntax/parser';
 import { scan } from '../../src/syntax/scanner';
-import { Interpreter } from '../../src/runtime/interpreter';
-import { LoxClass, LoxInstance } from '../../src/runtime/lox-class';
+import { Interpreter } from '../../src/interpreter/interpreter';
+import { LoxClass, LoxInstance } from '../../src/interpreter/lox-class';
 
 const interpreter = new Interpreter(() => undefined);
 

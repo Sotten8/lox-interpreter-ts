@@ -1,6 +1,6 @@
 import { RuntimeError } from '../common/errors';
 import type { Token } from '../syntax/token';
-import type { LoxValue } from './values';
+import type { LoxValue } from '../runtime/values';
 
 function undefinedVariable(name: Token): RuntimeError {
   return new RuntimeError(name.line, `Undefined variable '${name.lexeme}'.`);

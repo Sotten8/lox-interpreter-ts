@@ -2,7 +2,7 @@ import { RuntimeError } from '../common/errors';
 import type { Token } from '../syntax/token';
 import { LoxCallable, type LoxFunction } from './callable';
 import type { Interpreter } from './interpreter';
-import type { LoxValue } from './values';
+import type { LoxValue } from '../runtime/values';
 
 export class LoxClass extends LoxCallable {
   readonly name: string;

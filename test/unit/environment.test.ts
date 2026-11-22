@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formatRuntimeError, RuntimeError } from '../../src/common/errors';
-import { Environment } from '../../src/runtime/environment';
+import { Environment } from '../../src/interpreter/environment';
 import type { Token } from '../../src/syntax/token';
 
 const name = (lexeme: string, line = 1): Token => ({
