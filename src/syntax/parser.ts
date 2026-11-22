@@ -9,6 +9,10 @@ export interface ParseResult {
 
 class ParseError extends Error {}
 
+class NestingError extends Error {}
+
+export const MAX_NESTING = 100;
+
 const STATEMENT_KEYWORDS: ReadonlySet<TokenType> = new Set<TokenType>([
   'CLASS',
   'FUN',
@@ -24,6 +28,7 @@ class Parser {
   private readonly tokens: readonly Token[];
   private readonly errors: CompileError[] = [];
   private current = 0;
+  private depth = 0;
 
   constructor(tokens: readonly Token[]) {
     this.tokens = tokens;
@@ -31,10 +36,16 @@ class Parser {
 
   parse(): ParseResult {
     const statements: Stmt[] = [];
-    while (!this.isAtEnd()) {
-      const statement = this.declaration();
-      if (statement !== null) {
-        statements.push(statement);
+    try {
+      while (!this.isAtEnd()) {
+        const statement = this.declaration();
+        if (statement !== null) {
+          statements.push(statement);
+        }
+      }
+    } catch (error) {
+      if (!(error instanceof NestingError)) {
+        throw error;
       }
     }
     return { statements, errors: this.errors };
@@ -122,23 +133,29 @@ class Parser {
   }
 
   private block(): Stmt[] {
-    const statements: Stmt[] = [];
-    while (!this.check('RIGHT_BRACE') && !this.isAtEnd()) {
-      const statement = this.declaration();
-      if (statement !== null) {
-        statements.push(statement);
+    return this.nested(() => {
+      const statements: Stmt[] = [];
+      while (!this.check('RIGHT_BRACE') && !this.isAtEnd()) {
+        const statement = this.declaration();
+        if (statement !== null) {
+          statements.push(statement);
+        }
       }
-    }
-    this.consume('RIGHT_BRACE', "Expect '}' after block.");
-    return statements;
+      this.consume('RIGHT_BRACE', "Expect '}' after block.");
+      return statements;
+    });
+  }
+
+  private innerStatement(): Stmt {
+    return this.nested(() => this.statement());
   }
 
   private ifStatement(): Stmt {
     this.consume('LEFT_PAREN', "Expect '(' after 'if'.");
     const condition = this.expression();
     this.consume('RIGHT_PAREN', "Expect ')' after if condition.");
-    const thenBranch = this.statement();
-    const elseBranch = this.match('ELSE') ? this.statement() : null;
+    const thenBranch = this.innerStatement();
+    const elseBranch = this.match('ELSE') ? this.innerStatement() : null;
     return { kind: 'if', condition, thenBranch, elseBranch };
   }
 
@@ -146,7 +163,7 @@ class Parser {
     this.consume('LEFT_PAREN', "Expect '(' after 'while'.");
     const condition = this.expression();
     this.consume('RIGHT_PAREN', "Expect ')' after condition.");
-    const body = this.statement();
+    const body = this.innerStatement();
     return { kind: 'while', condition, body };
   }
 
@@ -174,7 +191,7 @@ class Parser {
     }
     this.consume('RIGHT_PAREN', "Expect ')' after for clauses.");
 
-    let body = this.statement();
+    let body = this.innerStatement();
     if (increment !== null) {
       body = {
         kind: 'block',
@@ -215,7 +232,7 @@ class Parser {
     const expr = this.or();
     if (this.match('EQUAL')) {
       const equals = this.previous();
-      const value = this.assignment();
+      const value = this.nested(() => this.assignment());
       if (expr.kind === 'variable') {
         return { kind: 'assign', name: expr.name, value };
       }
@@ -263,18 +280,24 @@ class Parser {
     kind: 'binary' | 'logical' = 'binary',
   ): Expr {
     let expr = operand();
-    while (this.match(...operators)) {
-      const operator = this.previous();
-      const right = operand();
-      expr = { kind, left: expr, operator, right };
+    const depth = this.depth;
+    try {
+      while (this.match(...operators)) {
+        this.deepen();
+        const operator = this.previous();
+        const right = operand();
+        expr = { kind, left: expr, operator, right };
+      }
+      return expr;
+    } finally {
+      this.depth = depth;
     }
-    return expr;
   }
 
   private unary(): Expr {
     if (this.match('BANG', 'MINUS')) {
       const operator = this.previous();
-      const right = this.unary();
+      const right = this.nested(() => this.unary());
       return { kind: 'unary', operator, right };
     }
     return this.call();
@@ -282,18 +305,25 @@ class Parser {
 
   private call(): Expr {
     let expr = this.primary();
-    while (true) {
-      if (this.match('LEFT_PAREN')) {
-        expr = this.finishCall(expr);
-      } else if (this.match('DOT')) {
-        const name = this.consume(
-          'IDENTIFIER',
-          "Expect property name after '.'.",
-        );
-        expr = { kind: 'get', object: expr, name };
-      } else {
-        return expr;
+    const depth = this.depth;
+    try {
+      while (true) {
+        if (this.match('LEFT_PAREN')) {
+          this.deepen();
+          expr = this.finishCall(expr);
+        } else if (this.match('DOT')) {
+          this.deepen();
+          const name = this.consume(
+            'IDENTIFIER',
+            "Expect property name after '.'.",
+          );
+          expr = { kind: 'get', object: expr, name };
+        } else {
+          return expr;
+        }
       }
+    } finally {
+      this.depth = depth;
     }
   }
 
@@ -348,11 +378,29 @@ class Parser {
       return { kind: 'variable', name: this.previous() };
     }
     if (this.match('LEFT_PAREN')) {
-      const expression = this.expression();
+      const expression = this.nested(() => this.expression());
       this.consume('RIGHT_PAREN', "Expect ')' after expression.");
       return { kind: 'grouping', expression };
     }
     throw this.error(this.peek(), 'Expect expression.');
+  }
+
+  private nested<T>(parse: () => T): T {
+    const depth = this.depth;
+    this.deepen();
+    try {
+      return parse();
+    } finally {
+      this.depth = depth;
+    }
+  }
+
+  private deepen(): void {
+    if (this.depth >= MAX_NESTING) {
+      this.errors.push(compileErrorAt(this.peek(), 'Too much nesting.'));
+      throw new NestingError();
+    }
+    this.depth++;
   }
 
   private match(...types: readonly TokenType[]): boolean {

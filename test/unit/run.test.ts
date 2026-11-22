@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { run } from '../../src/run';
+import { MAX_NESTING } from '../../src/syntax/parser';
 
 describe('run', () => {
   it('prints the output of the program and exits with 0', () => {
@@ -89,5 +90,118 @@ describe('run', () => {
       errors: ['Operand must be a number.\n[line 2]'],
       exitCode: 70,
     });
+  });
+});
+
+describe('run: edge cases', () => {
+  const sum = (n: number): string =>
+    `fun sum(n) {\n  if (n == 0) return 0;\n  return n + sum(n - 1);\n}\nprint sum(${n});`;
+
+  it('allows 200 nested calls by default', () => {
+    expect(run(sum(199))).toEqual({
+      output: ['19900'],
+      errors: [],
+      exitCode: 0,
+    });
+  });
+
+  it('reports Stack overflow at the 201st nested call by default', () => {
+    expect(run(sum(200))).toEqual({
+      output: [],
+      errors: ['Stack overflow.\n[line 3]'],
+      exitCode: 70,
+    });
+  });
+});
+
+describe('run: limits of the JavaScript engine', () => {
+  it('reports an overflow of the JavaScript stack as Stack overflow', () => {
+    expect(
+      run('fun f(n) {\n  if (n > 0) f(n - 1);\n}\nf(1000000);', {
+        maxCallDepth: 1_000_000,
+      }),
+    ).toEqual({
+      output: [],
+      errors: ['Stack overflow.\n[line 2]'],
+      exitCode: 70,
+    });
+  });
+
+  it('reports Stack overflow for a deep body before the call limit', () => {
+    const body = `${'{'.repeat(90)} if (n > 0) f(n - 1); ${'}'.repeat(90)}`;
+
+    expect(run(`fun f(n) { ${body} } f(199); print "unreachable";`)).toEqual({
+      output: [],
+      errors: ['Stack overflow.\n[line 1]'],
+      exitCode: 70,
+    });
+  });
+
+  it('reports a string that is too long', () => {
+    expect(
+      run('print "start";\nvar s = "ab";\nwhile (true) s = s + s;'),
+    ).toEqual({
+      output: ['start'],
+      errors: ['String is too long.\n[line 3]'],
+      exitCode: 70,
+    });
+  });
+
+  it('reports a string that is too long inside a function', () => {
+    expect(
+      run(
+        'fun grow() {\n  var s = "ab";\n  while (true) s = s + s;\n}\ngrow();',
+      ),
+    ).toEqual({
+      output: [],
+      errors: ['String is too long.\n[line 3]'],
+      exitCode: 70,
+    });
+  });
+});
+
+describe('run: nesting limit', () => {
+  it('allows 100 levels of nesting', () => {
+    expect(run(`print ${'('.repeat(100)}7${')'.repeat(100)};`)).toEqual({
+      output: ['7'],
+      errors: [],
+      exitCode: 0,
+    });
+  });
+
+  it('rejects 101 levels of nesting', () => {
+    expect(run(`print ${'('.repeat(101)}7${')'.repeat(101)};`)).toEqual({
+      output: [],
+      errors: ["[line 1] Error at '7': Too much nesting."],
+      exitCode: 65,
+    });
+  });
+
+  it('reports too much nesting as a compile error', () => {
+    expect(run(`print ${'('.repeat(10_000)}1${')'.repeat(10_000)};`)).toEqual({
+      output: [],
+      errors: ["[line 1] Error at '(': Too much nesting."],
+      exitCode: 65,
+    });
+  });
+
+  const n = MAX_NESTING;
+
+  it.each([
+    ['parentheses', `print ${'('.repeat(n)}7${')'.repeat(n)};`],
+    [
+      'for loops whose increment adds two levels',
+      `${'for (var i = 0; i < 1; i = i + 1) '.repeat(n - 1)}print 7;`,
+    ],
+    [
+      'calls with arguments',
+      `fun id(x) { return x; } print ${'id('.repeat(n)}7${')'.repeat(n)};`,
+    ],
+    [
+      'methods in classes',
+      `${'class C { m() {'.repeat(n)}${'} }'.repeat(n)} print 7;`,
+    ],
+  ])('runs %s nested up to the limit', (_, source) => {
+    expect(run(source)).toEqual({ output: ['7'], errors: [], exitCode: 0 });
   });
 });
