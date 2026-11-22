@@ -35,23 +35,21 @@ export class Environment {
   }
 
   getAt(distance: number, name: string): LoxValue {
-    const scope = this.ancestor(distance);
-    if (!scope.values.has(name)) {
-      throw new Error(
-        `Resolver bug: '${name}' is not at distance ${distance}.`,
-      );
-    }
-    return scope.values.get(name) ?? null;
+    return this.ancestorWith(distance, name).values.get(name) ?? null;
   }
 
   assignAt(distance: number, name: string, value: LoxValue): void {
+    this.ancestorWith(distance, name).values.set(name, value);
+  }
+
+  private ancestorWith(distance: number, name: string): Environment {
     const scope = this.ancestor(distance);
     if (!scope.values.has(name)) {
       throw new Error(
         `Resolver bug: '${name}' is not at distance ${distance}.`,
       );
     }
-    scope.values.set(name, value);
+    return scope;
   }
 
   private ancestor(distance: number): Environment {
