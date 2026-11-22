@@ -208,6 +208,9 @@ class Parser {
       if (expr.kind === 'variable') {
         return { kind: 'assign', name: expr.name, value };
       }
+      if (expr.kind === 'get') {
+        return { kind: 'set', object: expr.object, name: expr.name, value };
+      }
       this.error(equals, 'Invalid assignment target.');
     }
     return expr;
@@ -268,10 +271,19 @@ class Parser {
 
   private call(): Expr {
     let expr = this.primary();
-    while (this.match('LEFT_PAREN')) {
-      expr = this.finishCall(expr);
+    while (true) {
+      if (this.match('LEFT_PAREN')) {
+        expr = this.finishCall(expr);
+      } else if (this.match('DOT')) {
+        const name = this.consume(
+          'IDENTIFIER',
+          "Expect property name after '.'.",
+        );
+        expr = { kind: 'get', object: expr, name };
+      } else {
+        return expr;
+      }
     }
-    return expr;
   }
 
   private finishCall(callee: Expr): Expr {

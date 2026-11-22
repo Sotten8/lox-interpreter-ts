@@ -4,7 +4,9 @@ import type {
   UnaryExpr,
   BinaryExpr,
   CallExpr,
+  GetExpr,
   LogicalExpr,
+  SetExpr,
   Stmt,
   VariableExpr,
 } from '../syntax/ast';
@@ -20,7 +22,7 @@ import {
   NativeFunction,
   ReturnSignal,
 } from './callable';
-import { LoxClass } from './lox-class';
+import { LoxClass, LoxInstance } from './lox-class';
 
 export type Output = (line: string) => void;
 
@@ -184,7 +186,29 @@ export class Interpreter {
         return this.evaluateAssign(expr);
       case 'call':
         return this.evaluateCall(expr);
+      case 'get':
+        return this.evaluateGet(expr);
+      case 'set':
+        return this.evaluateSet(expr);
     }
+  }
+
+  private evaluateGet(expr: GetExpr): LoxValue {
+    const object = this.evaluate(expr.object);
+    if (!(object instanceof LoxInstance)) {
+      throw new RuntimeError(expr.name.line, 'Only instances have properties.');
+    }
+    return object.get(expr.name);
+  }
+
+  private evaluateSet(expr: SetExpr): LoxValue {
+    const object = this.evaluate(expr.object);
+    if (!(object instanceof LoxInstance)) {
+      throw new RuntimeError(expr.name.line, 'Only instances have fields.');
+    }
+    const value = this.evaluate(expr.value);
+    object.set(expr.name, value);
+    return value;
   }
 
   private lookUpVariable(expr: VariableExpr): LoxValue {

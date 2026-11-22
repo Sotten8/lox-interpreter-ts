@@ -50,6 +50,19 @@ export interface CallExpr {
   readonly args: readonly Expr[];
 }
 
+export interface GetExpr {
+  readonly kind: 'get';
+  readonly object: Expr;
+  readonly name: Token;
+}
+
+export interface SetExpr {
+  readonly kind: 'set';
+  readonly object: Expr;
+  readonly name: Token;
+  readonly value: Expr;
+}
+
 export type Expr =
   | LiteralExpr
   | GroupingExpr
@@ -58,7 +71,9 @@ export type Expr =
   | LogicalExpr
   | VariableExpr
   | AssignExpr
-  | CallExpr;
+  | CallExpr
+  | GetExpr
+  | SetExpr;
 
 export interface ExpressionStmt {
   readonly kind: 'expression';

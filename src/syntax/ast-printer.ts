@@ -27,6 +27,10 @@ export function printExpr(expr: Expr): string {
       return `(= ${expr.name.lexeme} ${printExpr(expr.value)})`;
     case 'call':
       return `(${['call', printExpr(expr.callee), ...expr.args.map(printExpr)].join(' ')})`;
+    case 'get':
+      return `(get ${printExpr(expr.object)} ${expr.name.lexeme})`;
+    case 'set':
+      return `(set ${printExpr(expr.object)} ${expr.name.lexeme} ${printExpr(expr.value)})`;
   }
 }
 

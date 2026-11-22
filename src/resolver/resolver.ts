@@ -121,6 +121,13 @@ class Resolver {
           this.resolveExpression(argument);
         }
         return;
+      case 'get':
+        this.resolveExpression(expr.object);
+        return;
+      case 'set':
+        this.resolveExpression(expr.value);
+        this.resolveExpression(expr.object);
+        return;
       default:
         return assertNever(expr);
     }
