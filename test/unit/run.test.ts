@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { run } from '../../src/run';
+import { printAst, run } from '../../src/run';
 import { MAX_NESTING } from '../../src/syntax/parser';
 
 describe('run', () => {
@@ -203,5 +203,47 @@ describe('run: nesting limit', () => {
     ],
   ])('runs %s nested up to the limit', (_, source) => {
     expect(run(source)).toEqual({ output: ['7'], errors: [], exitCode: 0 });
+  });
+});
+
+describe('printAst', () => {
+  it('gives one tree for every statement and exits with 0', () => {
+    expect(printAst('var speed = 3;\nprint speed * 2;')).toEqual({
+      output: ['(var speed 3)', '(print (* speed 2))'],
+      errors: [],
+      exitCode: 0,
+    });
+  });
+
+  it('does not run the program', () => {
+    expect(printAst('print "a" < 1;')).toEqual({
+      output: ['(print (< "a" 1))'],
+      errors: [],
+      exitCode: 0,
+    });
+  });
+
+  it('does not look for static errors', () => {
+    expect(printAst('return 5;')).toEqual({
+      output: ['(return 5)'],
+      errors: [],
+      exitCode: 0,
+    });
+  });
+
+  it('reports a syntax error and exits with 65', () => {
+    expect(printAst('print 2 *;')).toEqual({
+      output: [],
+      errors: ["[line 1] Error at ';': Expect expression."],
+      exitCode: 65,
+    });
+  });
+
+  it('prints a tree nested up to the limit', () => {
+    const n = MAX_NESTING;
+
+    expect(printAst(`print ${'('.repeat(n)}7${')'.repeat(n)};`).output).toEqual(
+      [`(print ${'(group '.repeat(n)}7${')'.repeat(n)})`],
+    );
   });
 });

@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { run } from './run';
+import { printAst, run } from './run';
 
 export type Write = (text: string) => void;
 
@@ -8,10 +8,11 @@ export function cli(
   stdout: Write,
   stderr: Write,
 ): number {
-  const [path, ...rest] = args;
+  const astMode = args[0] === '--ast';
+  const [path, ...rest] = astMode ? args.slice(1) : args;
 
   if (path === undefined || rest.length > 0) {
-    stderr('Usage: lox <script>\n');
+    stderr('Usage: lox [--ast] <script>\n');
     return 64;
   }
 
@@ -23,7 +24,7 @@ export function cli(
     return 66;
   }
 
-  const result = run(source);
+  const result = astMode ? printAst(source) : run(source);
   for (const line of result.output) {
     stdout(`${line}\n`);
   }

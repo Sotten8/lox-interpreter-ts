@@ -69,7 +69,11 @@ describe('cli', () => {
   });
 
   it('prints the usage and exits with 64 without one script', () => {
-    const usage = { code: 64, stdout: '', stderr: 'Usage: lox <script>\n' };
+    const usage = {
+      code: 64,
+      stdout: '',
+      stderr: 'Usage: lox [--ast] <script>\n',
+    };
 
     expect(runCli([])).toEqual(usage);
     expect(runCli([scriptWith('print 1;'), scriptWith('print 2;')])).toEqual(
@@ -84,6 +88,26 @@ describe('cli', () => {
       code: 66,
       stdout: '',
       stderr: `Cannot read file '${path}'.\n`,
+    });
+  });
+});
+
+describe('cli: --ast', () => {
+  it('prints the syntax tree of every statement and exits with 0', () => {
+    expect(
+      runCli(['--ast', scriptWith('var total = 4;\nprint total;')]),
+    ).toEqual({
+      code: 0,
+      stdout: '(var total 4)\n(print total)\n',
+      stderr: '',
+    });
+  });
+
+  it('prints the usage and exits with 64 for --ast after the script', () => {
+    expect(runCli([scriptWith('print 1;'), '--ast'])).toEqual({
+      code: 64,
+      stdout: '',
+      stderr: 'Usage: lox [--ast] <script>\n',
     });
   });
 });
