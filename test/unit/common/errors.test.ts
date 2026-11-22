@@ -4,8 +4,8 @@ import {
   compileErrorAt,
   formatCompileError,
   formatRuntimeError,
-} from '../../src/common/errors';
-import type { Token, TokenType } from '../../src/syntax/token';
+} from '../../../src/common/errors';
+import type { Token, TokenType } from '../../../src/syntax/token';
 
 const token = (type: TokenType, lexeme: string): Token => ({
   type,

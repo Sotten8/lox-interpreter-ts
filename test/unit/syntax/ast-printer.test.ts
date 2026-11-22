@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Expr, Stmt } from '../../src/syntax/ast';
-import { printExpr, printStmt } from '../../src/syntax/ast-printer';
+import type { Expr, Stmt } from '../../../src/syntax/ast';
+import { printExpr, printStmt } from '../../../src/syntax/ast-printer';
 
 describe('ast-printer: invalid nodes', () => {
   it('rejects an unknown statement', () => {

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { formatCompileError } from '../../src/common/errors';
-import { resolve } from '../../src/resolver/resolver';
-import { parse } from '../../src/syntax/parser';
-import { scan } from '../../src/syntax/scanner';
-import type { Expr, Stmt } from '../../src/syntax/ast';
+import { formatCompileError } from '../../../src/common/errors';
+import { resolve } from '../../../src/resolver/resolver';
+import { parse } from '../../../src/syntax/parser';
+import { scan } from '../../../src/syntax/scanner';
+import type { Expr, Stmt } from '../../../src/syntax/ast';
 
 const errorsOf = (source: string): string[] => {
   const { statements } = parse(scan(source).tokens);

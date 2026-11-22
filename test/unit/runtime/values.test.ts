@@ -4,7 +4,7 @@ import {
   isTruthy,
   stringify,
   type LoxValue,
-} from '../../src/runtime/values';
+} from '../../../src/runtime/values';
 
 describe('isTruthy function tests', () => {
   it('treats nil and false as false', () => {
