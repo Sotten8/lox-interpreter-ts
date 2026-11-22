@@ -1,6 +1,7 @@
 import type { FunctionStmt } from '../syntax/ast';
 import { Environment } from './environment';
 import type { Interpreter } from './interpreter';
+import type { LoxInstance } from './lox-class';
 import type { LoxValue } from './values';
 
 export class ReturnSignal {
@@ -55,6 +56,12 @@ export class LoxFunction extends LoxCallable {
 
   get arity(): number {
     return this.declaration.params.length;
+  }
+
+  bind(instance: LoxInstance): LoxFunction {
+    const environment = new Environment(this.closure);
+    environment.define('this', instance);
+    return new LoxFunction(this.declaration, environment);
   }
 
   call(interpreter: Interpreter, args: readonly LoxValue[]): LoxValue {

@@ -1,19 +1,28 @@
 import { RuntimeError } from '../errors';
 import type { Token } from '../syntax/token';
-import { LoxCallable } from './callable';
+import { LoxCallable, type LoxFunction } from './callable';
 import type { Interpreter } from './interpreter';
 import type { LoxValue } from './values';
 
 export class LoxClass extends LoxCallable {
   readonly name: string;
+  private readonly methods: ReadonlyMap<string, LoxFunction>;
 
-  constructor(name: string) {
+  constructor(
+    name: string,
+    methods: ReadonlyMap<string, LoxFunction> = new Map(),
+  ) {
     super();
     this.name = name;
+    this.methods = methods;
   }
 
   get arity(): number {
     return 0;
+  }
+
+  findMethod(name: string): LoxFunction | undefined {
+    return this.methods.get(name);
   }
 
   call(_interpreter: Interpreter, _args: readonly LoxValue[]): LoxValue {
@@ -34,10 +43,14 @@ export class LoxInstance {
   }
 
   get(name: Token): LoxValue {
-    if (!this.fields.has(name.lexeme)) {
-      throw new RuntimeError(name.line, `Undefined property '${name.lexeme}'.`);
+    if (this.fields.has(name.lexeme)) {
+      return this.fields.get(name.lexeme) ?? null;
     }
-    return this.fields.get(name.lexeme) ?? null;
+    const method = this.loxClass.findMethod(name.lexeme);
+    if (method !== undefined) {
+      return method.bind(this);
+    }
+    throw new RuntimeError(name.line, `Undefined property '${name.lexeme}'.`);
   }
 
   set(name: Token, value: LoxValue): void {
