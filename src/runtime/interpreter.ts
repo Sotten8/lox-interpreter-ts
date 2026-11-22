@@ -8,6 +8,7 @@ import type {
   LogicalExpr,
   SetExpr,
   Stmt,
+  ThisExpr,
   VariableExpr,
 } from '../syntax/ast';
 import type { Locals } from '../resolver/resolver';
@@ -141,12 +142,20 @@ export class Interpreter {
           new LoxFunction(stmt, this.environment),
         );
         return;
-      case 'class':
+      case 'class': {
+        const methods = new Map<string, LoxFunction>();
+        for (const method of stmt.methods) {
+          methods.set(
+            method.name.lexeme,
+            new LoxFunction(method, this.environment),
+          );
+        }
         this.environment.define(
           stmt.name.lexeme,
-          new LoxClass(stmt.name.lexeme),
+          new LoxClass(stmt.name.lexeme, methods),
         );
         return;
+      }
       case 'return':
         throw new ReturnSignal(
           stmt.value === null ? null : this.evaluate(stmt.value),
@@ -181,7 +190,7 @@ export class Interpreter {
       case 'logical':
         return this.evaluateLogical(expr);
       case 'variable':
-        return this.lookUpVariable(expr);
+        return this.lookUpVariable(expr.name, expr);
       case 'assign':
         return this.evaluateAssign(expr);
       case 'call':
@@ -190,6 +199,8 @@ export class Interpreter {
         return this.evaluateGet(expr);
       case 'set':
         return this.evaluateSet(expr);
+      case 'this':
+        return this.lookUpVariable(expr.keyword, expr);
     }
   }
 
@@ -211,12 +222,12 @@ export class Interpreter {
     return value;
   }
 
-  private lookUpVariable(expr: VariableExpr): LoxValue {
+  private lookUpVariable(name: Token, expr: VariableExpr | ThisExpr): LoxValue {
     const distance = this.locals.get(expr);
     if (distance === undefined) {
-      return this.globals.get(expr.name);
+      return this.globals.get(name);
     }
-    return this.environment.getAt(distance, expr.name.lexeme);
+    return this.environment.getAt(distance, name.lexeme);
   }
 
   private evaluateAssign(expr: AssignExpr): LoxValue {

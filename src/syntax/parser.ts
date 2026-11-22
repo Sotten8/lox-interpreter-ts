@@ -1,4 +1,4 @@
-import type { Expr, Stmt } from './ast';
+import type { Expr, FunctionStmt, Stmt } from './ast';
 import { compileErrorAt, type CompileError } from '../errors';
 import type { Token, TokenType } from './token';
 
@@ -46,7 +46,7 @@ class Parser {
         return this.classDeclaration();
       }
       if (this.match('FUN')) {
-        return this.functionDeclaration();
+        return this.functionDeclaration('function');
       }
       if (this.match('VAR')) {
         return this.varDeclaration();
@@ -64,19 +64,23 @@ class Parser {
   private classDeclaration(): Stmt {
     const name = this.consume('IDENTIFIER', 'Expect class name.');
     this.consume('LEFT_BRACE', "Expect '{' before class body.");
+    const methods: FunctionStmt[] = [];
+    while (!this.check('RIGHT_BRACE') && !this.isAtEnd()) {
+      methods.push(this.functionDeclaration('method'));
+    }
     this.consume('RIGHT_BRACE', "Expect '}' after class body.");
-    return { kind: 'class', name };
+    return { kind: 'class', name, methods };
   }
 
-  private functionDeclaration(): Stmt {
-    const name = this.consume('IDENTIFIER', 'Expect function name.');
-    this.consume('LEFT_PAREN', "Expect '(' after function name.");
+  private functionDeclaration(kind: 'function' | 'method'): FunctionStmt {
+    const name = this.consume('IDENTIFIER', `Expect ${kind} name.`);
+    this.consume('LEFT_PAREN', `Expect '(' after ${kind} name.`);
     const params = this.commaSeparated(
       () => this.consume('IDENTIFIER', 'Expect parameter name.'),
       "Can't have more than 255 parameters.",
     );
     this.consume('RIGHT_PAREN', "Expect ')' after parameters.");
-    this.consume('LEFT_BRACE', "Expect '{' before function body.");
+    this.consume('LEFT_BRACE', `Expect '{' before ${kind} body.`);
     const body = this.block();
     return { kind: 'function', name, params, body };
   }
@@ -320,6 +324,9 @@ class Parser {
     }
     if (this.match('NUMBER', 'STRING')) {
       return { kind: 'literal', value: this.previous().literal };
+    }
+    if (this.match('THIS')) {
+      return { kind: 'this', keyword: this.previous() };
     }
     if (this.match('IDENTIFIER')) {
       return { kind: 'variable', name: this.previous() };

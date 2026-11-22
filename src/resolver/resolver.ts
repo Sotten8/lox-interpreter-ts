@@ -3,20 +3,23 @@ import type {
   Expr,
   FunctionStmt,
   Stmt,
+  ThisExpr,
   VariableExpr,
 } from '../syntax/ast';
 import type { Token } from '../syntax/token';
 import { compileErrorAt, type CompileError } from '../errors';
 import { assertNever } from '../assert-never';
 
-export type Locals = ReadonlyMap<VariableExpr | AssignExpr, number>;
+type LocalExpr = VariableExpr | AssignExpr | ThisExpr;
+
+export type Locals = ReadonlyMap<LocalExpr, number>;
 
 export interface ResolveResult {
   readonly locals: Locals;
   readonly errors: readonly CompileError[];
 }
 
-type FunctionType = 'none' | 'function';
+type FunctionType = 'none' | 'function' | 'method';
 
 export function resolve(statements: readonly Stmt[]): ResolveResult {
   const resolver = new Resolver();
@@ -25,7 +28,7 @@ export function resolve(statements: readonly Stmt[]): ResolveResult {
 }
 
 class Resolver {
-  readonly locals = new Map<VariableExpr | AssignExpr, number>();
+  readonly locals = new Map<LocalExpr, number>();
   readonly errors: CompileError[] = [];
   private readonly scopes: Map<string, boolean>[] = [];
   private currentFunction: FunctionType = 'none';
@@ -68,11 +71,16 @@ class Resolver {
       case 'function':
         this.declare(stmt.name);
         this.define(stmt.name);
-        this.resolveFunction(stmt);
+        this.resolveFunction(stmt, 'function');
         return;
       case 'class':
         this.declare(stmt.name);
         this.define(stmt.name);
+        this.beginScope().set('this', true);
+        for (const method of stmt.methods) {
+          this.resolveFunction(method, 'method');
+        }
+        this.endScope();
         return;
       case 'return':
         if (this.currentFunction === 'none') {
@@ -128,14 +136,17 @@ class Resolver {
         this.resolveExpression(expr.value);
         this.resolveExpression(expr.object);
         return;
+      case 'this':
+        this.resolveLocal(expr, 'this');
+        return;
       default:
         return assertNever(expr);
     }
   }
 
-  private resolveFunction(stmt: FunctionStmt): void {
+  private resolveFunction(stmt: FunctionStmt, type: FunctionType): void {
     const enclosingFunction = this.currentFunction;
-    this.currentFunction = 'function';
+    this.currentFunction = type;
     this.beginScope();
     for (const param of stmt.params) {
       this.declare(param);
@@ -146,8 +157,10 @@ class Resolver {
     this.currentFunction = enclosingFunction;
   }
 
-  private beginScope(): void {
-    this.scopes.push(new Map());
+  private beginScope(): Map<string, boolean> {
+    const scope = new Map<string, boolean>();
+    this.scopes.push(scope);
+    return scope;
   }
 
   private endScope(): void {
@@ -173,7 +186,7 @@ class Resolver {
     this.errors.push(compileErrorAt(token, message));
   }
 
-  private resolveLocal(expr: VariableExpr | AssignExpr, name: string): void {
+  private resolveLocal(expr: LocalExpr, name: string): void {
     for (let depth = 0; depth < this.scopes.length; depth++) {
       if (this.scopes.at(-1 - depth)?.has(name)) {
         this.locals.set(expr, depth);

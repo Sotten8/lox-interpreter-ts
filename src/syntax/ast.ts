@@ -63,6 +63,11 @@ export interface SetExpr {
   readonly value: Expr;
 }
 
+export interface ThisExpr {
+  readonly kind: 'this';
+  readonly keyword: Token;
+}
+
 export type Expr =
   | LiteralExpr
   | GroupingExpr
@@ -73,7 +78,8 @@ export type Expr =
   | AssignExpr
   | CallExpr
   | GetExpr
-  | SetExpr;
+  | SetExpr
+  | ThisExpr;
 
 export interface ExpressionStmt {
   readonly kind: 'expression';
@@ -125,6 +131,7 @@ export interface ReturnStmt {
 export interface ClassStmt {
   readonly kind: 'class';
   readonly name: Token;
+  readonly methods: readonly FunctionStmt[];
 }
 
 export type Stmt =
