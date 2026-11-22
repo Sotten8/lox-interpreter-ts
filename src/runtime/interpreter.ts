@@ -8,6 +8,7 @@ import type {
   LogicalExpr,
   SetExpr,
   Stmt,
+  SuperExpr,
   ThisExpr,
   VariableExpr,
 } from '../syntax/ast';
@@ -154,15 +155,16 @@ export class Interpreter {
           }
           superclass = value;
         }
+        let closure = this.environment;
+        if (superclass !== null) {
+          closure = new Environment(this.environment);
+          closure.define('super', superclass);
+        }
         const methods = new Map<string, LoxFunction>();
         for (const method of stmt.methods) {
           methods.set(
             method.name.lexeme,
-            new LoxFunction(
-              method,
-              this.environment,
-              method.name.lexeme === 'init',
-            ),
+            new LoxFunction(method, closure, method.name.lexeme === 'init'),
           );
         }
         this.environment.define(
@@ -216,7 +218,26 @@ export class Interpreter {
         return this.evaluateSet(expr);
       case 'this':
         return this.lookUpVariable(expr.keyword, expr);
+      case 'super':
+        return this.evaluateSuper(expr);
     }
+  }
+
+  private evaluateSuper(expr: SuperExpr): LoxValue {
+    const distance = this.locals.get(expr);
+    if (distance === undefined) {
+      throw new Error("Resolver bug: 'super' is not resolved.");
+    }
+    const superclass = this.environment.getAt(distance, 'super') as LoxClass;
+    const object = this.environment.getAt(distance - 1, 'this') as LoxInstance;
+    const method = superclass.findMethod(expr.method.lexeme);
+    if (method === undefined) {
+      throw new RuntimeError(
+        expr.method.line,
+        `Undefined property '${expr.method.lexeme}'.`,
+      );
+    }
+    return method.bind(object);
   }
 
   private evaluateGet(expr: GetExpr): LoxValue {

@@ -3,6 +3,7 @@ import type {
   Expr,
   FunctionStmt,
   Stmt,
+  SuperExpr,
   ThisExpr,
   VariableExpr,
 } from '../syntax/ast';
@@ -10,7 +11,7 @@ import type { Token } from '../syntax/token';
 import { compileErrorAt, type CompileError } from '../errors';
 import { assertNever } from '../assert-never';
 
-type LocalExpr = VariableExpr | AssignExpr | ThisExpr;
+type LocalExpr = VariableExpr | AssignExpr | ThisExpr | SuperExpr;
 
 export type Locals = ReadonlyMap<LocalExpr, number>;
 
@@ -21,7 +22,7 @@ export interface ResolveResult {
 
 type FunctionType = 'none' | 'function' | 'method' | 'initializer';
 
-type ClassType = 'none' | 'class';
+type ClassType = 'none' | 'class' | 'subclass';
 
 export function resolve(statements: readonly Stmt[]): ResolveResult {
   const resolver = new Resolver();
@@ -82,6 +83,7 @@ class Resolver {
         this.declare(stmt.name);
         this.define(stmt.name);
         if (stmt.superclass !== null) {
+          this.currentClass = 'subclass';
           if (stmt.superclass.name.lexeme === stmt.name.lexeme) {
             this.report(
               stmt.superclass.name,
@@ -89,6 +91,7 @@ class Resolver {
             );
           }
           this.resolveExpression(stmt.superclass);
+          this.beginScope().set('super', true);
         }
         this.beginScope().set('this', true);
         for (const method of stmt.methods) {
@@ -98,6 +101,9 @@ class Resolver {
           );
         }
         this.endScope();
+        if (stmt.superclass !== null) {
+          this.endScope();
+        }
         this.currentClass = enclosingClass;
         return;
       }
@@ -167,6 +173,17 @@ class Resolver {
           return;
         }
         this.resolveLocal(expr, 'this');
+        return;
+      case 'super':
+        if (this.currentClass === 'none') {
+          this.report(expr.keyword, "Can't use 'super' outside of a class.");
+        } else if (this.currentClass !== 'subclass') {
+          this.report(
+            expr.keyword,
+            "Can't use 'super' in a class with no superclass.",
+          );
+        }
+        this.resolveLocal(expr, 'super');
         return;
       default:
         return assertNever(expr);

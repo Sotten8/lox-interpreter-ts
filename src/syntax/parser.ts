@@ -332,6 +332,15 @@ class Parser {
     if (this.match('NUMBER', 'STRING')) {
       return { kind: 'literal', value: this.previous().literal };
     }
+    if (this.match('SUPER')) {
+      const keyword = this.previous();
+      this.consume('DOT', "Expect '.' after 'super'.");
+      const method = this.consume(
+        'IDENTIFIER',
+        'Expect superclass method name.',
+      );
+      return { kind: 'super', keyword, method };
+    }
     if (this.match('THIS')) {
       return { kind: 'this', keyword: this.previous() };
     }

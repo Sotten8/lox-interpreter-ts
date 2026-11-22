@@ -68,6 +68,12 @@ export interface ThisExpr {
   readonly keyword: Token;
 }
 
+export interface SuperExpr {
+  readonly kind: 'super';
+  readonly keyword: Token;
+  readonly method: Token;
+}
+
 export type Expr =
   | LiteralExpr
   | GroupingExpr
@@ -79,7 +85,8 @@ export type Expr =
   | CallExpr
   | GetExpr
   | SetExpr
-  | ThisExpr;
+  | ThisExpr
+  | SuperExpr;
 
 export interface ExpressionStmt {
   readonly kind: 'expression';

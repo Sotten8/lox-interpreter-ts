@@ -33,6 +33,8 @@ export function printExpr(expr: Expr): string {
       return `(set ${printExpr(expr.object)} ${expr.name.lexeme} ${printExpr(expr.value)})`;
     case 'this':
       return 'this';
+    case 'super':
+      return `(super ${expr.method.lexeme})`;
   }
 }
 
