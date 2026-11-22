@@ -19,7 +19,7 @@ export interface ResolveResult {
   readonly errors: readonly CompileError[];
 }
 
-type FunctionType = 'none' | 'function' | 'method';
+type FunctionType = 'none' | 'function' | 'method' | 'initializer';
 
 type ClassType = 'none' | 'class';
 
@@ -83,7 +83,10 @@ class Resolver {
         this.define(stmt.name);
         this.beginScope().set('this', true);
         for (const method of stmt.methods) {
-          this.resolveFunction(method, 'method');
+          this.resolveFunction(
+            method,
+            method.name.lexeme === 'init' ? 'initializer' : 'method',
+          );
         }
         this.endScope();
         this.currentClass = enclosingClass;
@@ -94,6 +97,12 @@ class Resolver {
           this.report(stmt.keyword, "Can't return from top-level code.");
         }
         if (stmt.value !== null) {
+          if (this.currentFunction === 'initializer') {
+            this.report(
+              stmt.keyword,
+              "Can't return a value from an initializer.",
+            );
+          }
           this.resolveExpression(stmt.value);
         }
         return;

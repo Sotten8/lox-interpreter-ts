@@ -147,7 +147,11 @@ export class Interpreter {
         for (const method of stmt.methods) {
           methods.set(
             method.name.lexeme,
-            new LoxFunction(method, this.environment),
+            new LoxFunction(
+              method,
+              this.environment,
+              method.name.lexeme === 'init',
+            ),
           );
         }
         this.environment.define(

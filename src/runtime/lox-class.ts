@@ -18,15 +18,17 @@ export class LoxClass extends LoxCallable {
   }
 
   get arity(): number {
-    return 0;
+    return this.findMethod('init')?.arity ?? 0;
   }
 
   findMethod(name: string): LoxFunction | undefined {
     return this.methods.get(name);
   }
 
-  call(_interpreter: Interpreter, _args: readonly LoxValue[]): LoxValue {
-    return new LoxInstance(this);
+  call(interpreter: Interpreter, args: readonly LoxValue[]): LoxValue {
+    const instance = new LoxInstance(this);
+    this.findMethod('init')?.bind(instance).call(interpreter, args);
+    return instance;
   }
 
   toString(): string {
