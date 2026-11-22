@@ -1,6 +1,5 @@
 export const SKIPPED: ReadonlyMap<string, string> = new Map([
   ['benchmark', 'benchmarks print timings and are not tests'],
-  ['super', 'needs classes (stage 4)'],
   ['scanning', 'needs the token dump mode (not in MVP)'],
   ['expressions', 'needs the AST dump and bare expression modes (not in MVP)'],
   [
