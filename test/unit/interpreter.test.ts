@@ -1056,6 +1056,162 @@ describe('interpret: initializers', () => {
   });
 });
 
+describe('interpret: inheritance', () => {
+  const ANIMALS =
+    'class Animal { sound() { return "..."; } legs() { return 4; } } ';
+
+  it('calls a method declared in the superclass', () => {
+    expect(
+      outputOf(`${ANIMALS}class Dog < Animal {} print Dog().legs();`),
+    ).toEqual(['4']);
+  });
+
+  it('prefers a method of the subclass over the superclass one', () => {
+    expect(
+      outputOf(
+        `${ANIMALS}class Dog < Animal { legs() { return "woof"; } } var dog = Dog(); print dog.legs();`,
+      ),
+    ).toEqual(['woof']);
+  });
+
+  it('keeps the superclass method for instances of the superclass', () => {
+    expect(
+      outputOf(
+        `${ANIMALS}class Dog < Animal { sound() { return "woof"; } } print Animal().sound();`,
+      ),
+    ).toEqual(['...']);
+  });
+
+  it('does not add subclass methods to the superclass', () => {
+    expect(
+      errorOf(`${ANIMALS}class Dog < Animal { fetch() {} } Animal().fetch();`),
+    ).toBe("Undefined property 'fetch'.\n[line 1]");
+  });
+
+  it('takes the nearest method in a chain of classes', () => {
+    expect(
+      outputOf(
+        'class A { who() { return "a"; } } class B < A { who() { return "b"; } } class C < B {} print C().who();',
+      ),
+    ).toEqual(['b']);
+  });
+
+  it('finds a method three classes up', () => {
+    expect(
+      outputOf(
+        'class A { who() { return "a"; } } class B < A {} class C < B {} class D < C {} print D().who();',
+      ),
+    ).toEqual(['a']);
+  });
+
+  it('binds an inherited method to the subclass instance', () => {
+    expect(
+      outputOf(
+        'class Base { self() { return this; } } class Child < Base {} var c = Child(); print c.self() == c; print c.self();',
+      ),
+    ).toEqual(['true', 'Child instance']);
+  });
+
+  it('looks up a method called on this from the class of the instance', () => {
+    expect(
+      outputOf(
+        'class Base { describe() { return "I am " + this.name(); } name() { return "base"; } } class Child < Base { name() { return "child"; } } print Child().describe(); print Base().describe();',
+      ),
+    ).toEqual(['I am child', 'I am base']);
+  });
+
+  it('runs an inherited init', () => {
+    expect(
+      outputOf(
+        'class Shape { init(side) { this.side = side; } } class Square < Shape {} print Square(5).side;',
+      ),
+    ).toEqual(['5']);
+  });
+
+  it('checks the arguments against an inherited init', () => {
+    expect(
+      errorOf(
+        'class Shape { init(side) {} } class Square < Shape {} Square();',
+      ),
+    ).toBe('Expected 1 arguments but got 0.\n[line 1]');
+  });
+
+  it('uses init of the subclass instead of the inherited one', () => {
+    expect(
+      outputOf(
+        'class Shape { init(a, b) { print "shape"; } } class Dot < Shape { init() { print "dot"; } } Dot();',
+      ),
+    ).toEqual(['dot']);
+  });
+
+  it('prints a subclass and its instance with its own name', () => {
+    expect(
+      outputOf(`${ANIMALS}class Dog < Animal {} print Dog; print Dog();`),
+    ).toEqual(['Dog', 'Dog instance']);
+  });
+
+  it('inherits from a class declared in the same block', () => {
+    expect(
+      outputOf(
+        '{ class Plant { grow() { return "up"; } } class Tree < Plant {} print Tree().grow(); }',
+      ),
+    ).toEqual(['up']);
+  });
+
+  it('inherits from a class passed as an argument', () => {
+    expect(
+      outputOf(
+        'fun extend(Base) { class Child < Base {} return Child; } class Plant { grow() { return "up"; } } print extend(Plant)().grow();',
+      ),
+    ).toEqual(['up']);
+  });
+
+  it('keeps the superclass taken when the class was declared', () => {
+    expect(
+      outputOf(
+        `${ANIMALS}class Dog < Animal {} Animal = nil; print Dog().legs();`,
+      ),
+    ).toEqual(['4']);
+  });
+
+  it.each([
+    ['a number', 'var Base = 3;'],
+    ['nil', 'var Base;'],
+    ['a function', 'fun Base() {}'],
+    ['an instance', 'class Animal {} var Base = Animal();'],
+  ])('rejects %s as a superclass', (_, declaration) => {
+    expect(errorOf(`${declaration} class Dog < Base {}`)).toBe(
+      'Superclass must be a class.\n[line 1]',
+    );
+  });
+
+  it('rejects a native function as a superclass', () => {
+    expect(errorOf('class Timer < clock {}')).toBe(
+      'Superclass must be a class.\n[line 1]',
+    );
+  });
+
+  it('reports a wrong superclass at the line of its name', () => {
+    expect(errorOf('var Base = 3;\nclass Dog <\nBase {}')).toBe(
+      'Superclass must be a class.\n[line 3]',
+    );
+  });
+
+  it('reports an undefined superclass', () => {
+    expect(errorOf('class Dog < Missing {}')).toBe(
+      "Undefined variable 'Missing'.\n[line 1]",
+    );
+  });
+
+  it('stops before the class is declared when the superclass is wrong', () => {
+    expect(
+      execute(
+        'print "before"; var Base = 3; class Dog < Base {} print "after";',
+      ).lines,
+    ).toEqual(['before']);
+  });
+});
+
 describe('interpret: binding of variables', () => {
   it('uses the variable declared above the function, not below', () => {
     expect(

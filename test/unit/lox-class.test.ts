@@ -186,6 +186,71 @@ describe('LoxClass init', () => {
   });
 });
 
+const subclassOf = (
+  superclass: LoxClass,
+  ...methods: [string, LoxFunction][]
+): LoxClass => new LoxClass('Sub', new Map(methods), superclass);
+
+describe('LoxClass inheritance', () => {
+  it('finds a method of the superclass', () => {
+    const method = methodNamed('m');
+
+    expect(subclassOf(classWith(['m', method])).findMethod('m')).toBe(method);
+  });
+
+  it('prefers its own method over the method of the superclass', () => {
+    const own = methodNamed('m');
+    const sub = subclassOf(classWith(['m', methodNamed('m')]), ['m', own]);
+
+    expect(sub.findMethod('m')).toBe(own);
+  });
+
+  it('finds a method two classes up', () => {
+    const method = methodNamed('m');
+    const sub = subclassOf(subclassOf(classWith(['m', method])));
+
+    expect(sub.findMethod('m')).toBe(method);
+  });
+
+  it('finds nothing when no class in the chain has the method', () => {
+    expect(
+      subclassOf(subclassOf(classWith(['m', methodNamed('m')]))).findMethod(
+        'n',
+      ),
+    ).toBeUndefined();
+  });
+
+  it('does not give its methods to the superclass', () => {
+    const base = classWith();
+    subclassOf(base, ['m', methodNamed('m')]);
+
+    expect(base.findMethod('m')).toBeUndefined();
+  });
+
+  it('takes the arity of an inherited init', () => {
+    expect(subclassOf(classWith(['init', initializer('a, b, c')])).arity).toBe(
+      3,
+    );
+  });
+
+  it('creates an instance of the subclass with an inherited init', () => {
+    const sub = subclassOf(classWith(['init', initializer()]));
+    const instance = sub.call(interpreter, []) as LoxInstance;
+
+    expect(instance.loxClass).toBe(sub);
+  });
+
+  it('finds a method through a very long chain of classes', () => {
+    const method = methodNamed('m');
+    let loxClass = classWith(['m', method]);
+    for (let i = 0; i < 100000; i++) {
+      loxClass = subclassOf(loxClass);
+    }
+
+    expect(loxClass.findMethod('m')).toBe(method);
+  });
+});
+
 describe('LoxInstance methods', () => {
   it('returns a method as a function', () => {
     const instance = new LoxInstance(classWith(['m', methodNamed('m')]));

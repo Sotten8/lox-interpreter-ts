@@ -518,6 +518,45 @@ describe('parse: methods', () => {
   });
 });
 
+describe('parse: inheritance', () => {
+  it.each([
+    ['class Dog < Animal {}', '(class Dog < Animal)'],
+    ['class Dog < Animal { bark() {} }', '(class Dog < Animal (fun bark ()))'],
+  ])('parses %s', (source, tree) => {
+    expect(trees(source)).toEqual([tree]);
+  });
+
+  it('keeps a class without a superclass', () => {
+    const [statement] = parseSource('class Animal {}').statements;
+
+    expect(statement?.kind === 'class' && statement.superclass).toBeNull();
+  });
+
+  it('wraps the superclass name in a variable expression', () => {
+    const [statement] = parseSource('class Dog < Animal {}').statements;
+
+    expect(statement?.kind === 'class' && statement.superclass).toMatchObject({
+      kind: 'variable',
+      name: { lexeme: 'Animal', type: 'IDENTIFIER' },
+    });
+  });
+
+  it.each([
+    ['class Dog < {}', "[line 1] Error at '{': Expect superclass name."],
+    ['class Dog <', '[line 1] Error at end: Expect superclass name.'],
+    [
+      'class Dog < pets.Animal {}',
+      "[line 1] Error at '.': Expect '{' before class body.",
+    ],
+    [
+      'class Dog > Animal {}',
+      "[line 1] Error at '>': Expect '{' before class body.",
+    ],
+  ])('reports an error for %j', (source, message) => {
+    expect(errorsOf(source)).toEqual([message]);
+  });
+});
+
 describe('parse: this', () => {
   it.each([
     ['this', 'this'],

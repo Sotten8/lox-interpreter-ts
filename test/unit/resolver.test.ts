@@ -325,6 +325,77 @@ describe('resolve: classes', () => {
   });
 });
 
+describe('resolve: inheritance', () => {
+  it('ignores a global superclass', () => {
+    expect(depthsOf('class Animal {} class Dog < Animal {}')).toEqual([]);
+  });
+
+  it('resolves a superclass from the same block outside the class scope', () => {
+    expect(depthsOf('{ class Animal {} class Dog < Animal {} }')).toEqual([
+      ['Animal', 0],
+    ]);
+  });
+
+  it('resolves a superclass from an outer block', () => {
+    expect(depthsOf('{ class Animal {} { class Dog < Animal {} } }')).toEqual([
+      ['Animal', 1],
+    ]);
+  });
+
+  it('resolves a parameter used as a superclass', () => {
+    expect(
+      depthsOf('fun extend(Base) { class Child < Base {} return Child; }'),
+    ).toEqual([
+      ['Base', 0],
+      ['Child', 0],
+    ]);
+  });
+
+  it('allows a class to inherit from another class', () => {
+    expect(errorsOf('class Animal {} class Dog < Animal {}')).toEqual([]);
+  });
+
+  it('allows inheriting from a variable that is not a class', () => {
+    expect(errorsOf('var Animal = 1; class Dog < Animal {}')).toEqual([]);
+  });
+
+  it.each([
+    ['in global scope', 'class Loop < Loop {}'],
+    ['in a block', '{ class Loop < Loop {} }'],
+    [
+      'even when an outer class has the same name',
+      'class Loop {} { class Loop < Loop {} }',
+    ],
+  ])('reports a class inheriting from itself %s', (_, source) => {
+    expect(errorsOf(source)).toEqual([
+      "[line 1] Error at 'Loop': A class can't inherit from itself.",
+    ]);
+  });
+
+  it('reports inheriting from itself at the line of the superclass name', () => {
+    expect(errorsOf('class Loop\n<\nLoop {}')).toEqual([
+      "[line 3] Error at 'Loop': A class can't inherit from itself.",
+    ]);
+  });
+
+  it('reports a duplicate class and inheriting from itself together', () => {
+    expect(errorsOf('{ class Loop {} class Loop < Loop {} }')).toEqual([
+      `[line 1] Error at 'Loop': ${DUPLICATE}`,
+      "[line 1] Error at 'Loop': A class can't inherit from itself.",
+    ]);
+  });
+
+  it('still resolves a superclass with the name of the class', () => {
+    expect(depthsOf('{ class Loop < Loop {} }')).toEqual([['Loop', 0]]);
+  });
+
+  it('keeps the depth of this in a subclass method', () => {
+    expect(
+      depthsOf('class Animal {} class Dog < Animal { me() { return this; } }'),
+    ).toEqual([['this', 1]]);
+  });
+});
+
 describe('resolve: properties', () => {
   it('resolves the object of a get', () => {
     expect(depthsOf('{ var a; a.b; }')).toEqual([['a', 0]]);
