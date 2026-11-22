@@ -323,6 +323,52 @@ describe('resolve: classes', () => {
   });
 });
 
+describe('resolve: properties', () => {
+  it('resolves the object of a get', () => {
+    expect(depthsOf('{ var a; a.b; }')).toEqual([['a', 0]]);
+  });
+
+  it('resolves the object of a get in a chain', () => {
+    expect(depthsOf('{ var a; a.b.c; }')).toEqual([['a', 0]]);
+  });
+
+  it('resolves the object of a get that is called', () => {
+    expect(depthsOf('{ var a; a.b(); }')).toEqual([['a', 0]]);
+  });
+
+  it('does not resolve the property name of a get', () => {
+    expect(depthsOf('{ var b; var a; a.b; }')).toEqual([['a', 0]]);
+  });
+
+  it('resolves the object of a set', () => {
+    expect(depthsOf('{ var a; a.b = 1; }')).toEqual([['a', 0]]);
+  });
+
+  it('resolves the value of a set', () => {
+    expect(depthsOf('{ var a; g.b = a; }')).toEqual([['a', 0]]);
+  });
+
+  it('does not resolve the property name of a set', () => {
+    expect(depthsOf('{ var b; var a; a.b = 1; }')).toEqual([['a', 0]]);
+  });
+
+  it('adds one level for an object used inside a function', () => {
+    expect(depthsOf('{ var a; fun f() { a.b; } }')).toEqual([['a', 1]]);
+  });
+
+  it('reports a variable read in its own initializer through a get', () => {
+    expect(errorsOf('{ var a = a.b; }')).toEqual([
+      `[line 1] Error at 'a': ${INITIALIZER}`,
+    ]);
+  });
+
+  it('reports a variable read in its own initializer through a set value', () => {
+    expect(errorsOf('{ var a = g.b = a; }')).toEqual([
+      `[line 1] Error at 'a': ${INITIALIZER}`,
+    ]);
+  });
+});
+
 describe('resolve: invalid nodes', () => {
   it('rejects an unknown statement', () => {
     const unknown = { kind: 'unknown' } as unknown as Stmt;

@@ -29,6 +29,9 @@ const errorOf = (source: string): string | null => {
   return error === null ? null : formatRuntimeError(error);
 };
 
+const withInstance = (body: string): string =>
+  `class Box {} var box = Box(); ${body}`;
+
 const expectPrinted = (cases: [string, string][]): void => {
   for (const [source, expected] of cases) {
     expect(outputOf(`print ${source};`), source).toEqual([expected]);
@@ -513,50 +516,50 @@ describe('interpret: call depth', () => {
 
 describe('interpret: classes', () => {
   it('prints a class by its name', () => {
-    expect(outputOf('class Foo {} print Foo;')).toEqual(['Foo']);
+    expect(outputOf('class Box {} print Box;')).toEqual(['Box']);
   });
 
   it('prints an instance as the name of its class and "instance"', () => {
-    expect(outputOf('class Foo {} print Foo();')).toEqual(['Foo instance']);
+    expect(outputOf('class Box {} print Box();')).toEqual(['Box instance']);
   });
 
   it('creates a new instance on every call', () => {
-    expect(outputOf('class Foo {} print Foo() == Foo();')).toEqual(['false']);
+    expect(outputOf('class Box {} print Box() == Box();')).toEqual(['false']);
   });
 
   it('equals an instance to itself', () => {
     expect(
-      outputOf('class Foo {} var a = Foo(); var b = a; print a == b;'),
+      outputOf('class Box {} var a = Box(); var b = a; print a == b;'),
     ).toEqual(['true']);
   });
 
   it('does not equal a class to its instance', () => {
-    expect(outputOf('class Foo {} print Foo == Foo();')).toEqual(['false']);
+    expect(outputOf('class Box {} print Box == Box();')).toEqual(['false']);
   });
 
   it('stores a class in a variable', () => {
-    expect(outputOf('class Foo {} var F = Foo; print F;')).toEqual(['Foo']);
+    expect(outputOf('class Box {} var B = Box; print B;')).toEqual(['Box']);
   });
 
   it('creates an instance through a variable that holds a class', () => {
-    expect(outputOf('class Foo {} var F = Foo; print F();')).toEqual([
-      'Foo instance',
+    expect(outputOf('class Box {} var B = Box; print B();')).toEqual([
+      'Box instance',
     ]);
   });
 
   it('passes a class to a function that creates an instance', () => {
     expect(
-      outputOf('class Foo {} fun make(c) { return c(); } print make(Foo);'),
-    ).toEqual(['Foo instance']);
+      outputOf('class Box {} fun make(c) { return c(); } print make(Box);'),
+    ).toEqual(['Box instance']);
   });
 
   it('declares a class in a block', () => {
-    expect(outputOf('{ class Foo {} print Foo; }')).toEqual(['Foo']);
+    expect(outputOf('{ class Box {} print Box; }')).toEqual(['Box']);
   });
 
   it('hides a class declared in a block outside of it', () => {
-    expect(errorOf('{ class Foo {} } print Foo;')).toBe(
-      "Undefined variable 'Foo'.\n[line 1]",
+    expect(errorOf('{ class Box {} } print Box;')).toBe(
+      "Undefined variable 'Box'.\n[line 1]",
     );
   });
 
@@ -573,8 +576,194 @@ describe('interpret: classes', () => {
   });
 
   it('rejects one argument for a class without init', () => {
-    expect(errorOf('class Foo {} Foo(1);')).toBe(
+    expect(errorOf('class Box {} Box(1);')).toBe(
       'Expected 0 arguments but got 1.\n[line 1]',
+    );
+  });
+});
+
+describe('interpret: fields', () => {
+  it('sets a field and reads it back', () => {
+    expect(outputOf(withInstance('box.x = "value"; print box.x;'))).toEqual([
+      'value',
+    ]);
+  });
+
+  it('returns the assigned value from a set', () => {
+    expect(outputOf(withInstance('print box.x = 1;'))).toEqual(['1']);
+  });
+
+  it('overwrites a field', () => {
+    expect(
+      outputOf(withInstance('box.x = 1; box.x = 2; print box.x;')),
+    ).toEqual(['2']);
+  });
+
+  it('keeps the fields of different instances apart', () => {
+    expect(
+      outputOf(
+        'class Box {} var a = Box(); var b = Box(); a.x = 1; b.x = 2; print a.x; print b.x;',
+      ),
+    ).toEqual(['1', '2']);
+  });
+
+  it('keeps several fields of one instance apart', () => {
+    expect(
+      outputOf(withInstance('box.a = 1; box.b = 2; print box.a; print box.b;')),
+    ).toEqual(['1', '2']);
+  });
+
+  it('stores nil in a field', () => {
+    expect(outputOf(withInstance('box.x = nil; print box.x;'))).toEqual([
+      'nil',
+    ]);
+  });
+
+  it('stores false in a field', () => {
+    expect(outputOf(withInstance('box.x = false; print box.x;'))).toEqual([
+      'false',
+    ]);
+  });
+
+  it('stores zero in a field', () => {
+    expect(outputOf(withInstance('box.x = 0; print box.x;'))).toEqual(['0']);
+  });
+
+  it('stores an empty string in a field', () => {
+    expect(outputOf(withInstance('box.x = ""; print box.x;'))).toEqual(['']);
+  });
+
+  it('stores a class in a field', () => {
+    expect(outputOf(withInstance('box.x = Box; print box.x;'))).toEqual([
+      'Box',
+    ]);
+  });
+
+  it('reads a field through a chain of instances', () => {
+    expect(
+      outputOf(withInstance('box.a = Box(); box.a.b = 1; print box.a.b;')),
+    ).toEqual(['1']);
+  });
+
+  it('lets an instance hold itself', () => {
+    expect(
+      outputOf(withInstance('box.me = box; print box.me.me == box;')),
+    ).toEqual(['true']);
+  });
+
+  it('assigns a chain of field assignments from the right', () => {
+    expect(
+      outputOf(
+        'class Box {} var a = Box(); var b = Box(); a.x = b.y = 1; print a.x; print b.y;',
+      ),
+    ).toEqual(['1', '1']);
+  });
+
+  it('assigns a field to a variable assignment', () => {
+    expect(
+      outputOf(withInstance('var v; box.x = v = 3; print box.x;')),
+    ).toEqual(['3']);
+  });
+
+  it('calls a function stored in a field', () => {
+    expect(
+      outputOf(
+        withInstance('fun f(a) { print a; } box.g = f; box.g("called");'),
+      ),
+    ).toEqual(['called']);
+  });
+
+  it('reads a field set inside a function', () => {
+    expect(
+      outputOf(withInstance('fun set() { box.x = 1; } set(); print box.x;')),
+    ).toEqual(['1']);
+  });
+
+  it('reads a field of an instance created in a local scope', () => {
+    expect(
+      outputOf(
+        'class Box {} { var local = Box(); local.x = 1; print local.x; }',
+      ),
+    ).toEqual(['1']);
+  });
+
+  it('stores a field named like a JavaScript property', () => {
+    expect(
+      outputOf(withInstance('box.constructor = 1; print box.constructor;')),
+    ).toEqual(['1']);
+  });
+
+  it('stores a field named __proto__', () => {
+    expect(
+      outputOf(withInstance('box.__proto__ = 1; print box.__proto__;')),
+    ).toEqual(['1']);
+  });
+});
+
+describe('interpret: property errors', () => {
+  it('reports an undefined property', () => {
+    expect(errorOf(withInstance('print box.x;'))).toBe(
+      "Undefined property 'x'.\n[line 1]",
+    );
+  });
+
+  it('does not take a field of another instance', () => {
+    expect(
+      errorOf('class Box {} var a = Box(); var b = Box(); a.x = 1; print b.x;'),
+    ).toBe("Undefined property 'x'.\n[line 1]");
+  });
+
+  it('does not see a JavaScript property of the field storage', () => {
+    expect(errorOf(withInstance('print box.constructor;'))).toBe(
+      "Undefined property 'constructor'.\n[line 1]",
+    );
+  });
+
+  it('reports the line of the property name for an undefined property', () => {
+    expect(errorOf(withInstance('print box\n.\nx;'))).toBe(
+      "Undefined property 'x'.\n[line 3]",
+    );
+  });
+
+  it('rejects reading a property of a number', () => {
+    expect(errorOf('var n = 1; print n.x;')).toBe(
+      'Only instances have properties.\n[line 1]',
+    );
+  });
+
+  it('rejects reading a property of a class', () => {
+    expect(errorOf('class Box {} print Box.x;')).toBe(
+      'Only instances have properties.\n[line 1]',
+    );
+  });
+
+  it('reports the line of the property name for a non-instance', () => {
+    expect(errorOf('var n = 1;\nn\n.\nx;')).toBe(
+      'Only instances have properties.\n[line 4]',
+    );
+  });
+
+  it('rejects setting a field on a number', () => {
+    expect(errorOf('var n = 1; n.x = 2;')).toBe(
+      'Only instances have fields.\n[line 1]',
+    );
+  });
+
+  it('rejects setting a field on a class', () => {
+    expect(errorOf('class Box {} Box.x = 1;')).toBe(
+      'Only instances have fields.\n[line 1]',
+    );
+  });
+
+  it('reports the line of the property name when setting on a non-instance', () => {
+    expect(errorOf('var n = 1;\nn\n.\nx = 2;')).toBe(
+      'Only instances have fields.\n[line 4]',
+    );
+  });
+
+  it('checks the object of a set before evaluating the value', () => {
+    expect(errorOf('var n = 1; n.x = missing;')).toBe(
+      'Only instances have fields.\n[line 1]',
     );
   });
 });

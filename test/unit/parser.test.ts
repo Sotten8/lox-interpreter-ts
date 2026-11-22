@@ -417,6 +417,75 @@ describe('parse: classes', () => {
   });
 });
 
+describe('parse: property access', () => {
+  it.each([
+    ['a.b', '(get a b)'],
+    ['a.b.c', '(get (get a b) c)'],
+    ['a.b()', '(call (get a b))'],
+    ['a().b', '(get (call a) b)'],
+    ['a.b().c', '(get (call (get a b)) c)'],
+    ['(a).b', '(get (group a) b)'],
+    ['a.b + c.d', '(+ (get a b) (get c d))'],
+  ])('parses %s', (source, tree) => {
+    expect(exprTree(source)).toBe(tree);
+  });
+
+  it('handles a dot priority higher than unary minus', () => {
+    expect(exprTree('-a.b')).toBe('(- (get a b))');
+  });
+
+  it('handles a dot priority higher than a call argument list', () => {
+    expect(exprTree('f(a.b, c.d)')).toBe('(call f (get a b) (get c d))');
+  });
+
+  it.each([
+    ['a.;', "[line 1] Error at ';': Expect property name after '.'."],
+    ['a.1;', "[line 1] Error at '1': Expect property name after '.'."],
+    ['a.(b);', "[line 1] Error at '(': Expect property name after '.'."],
+    ['a.print;', "[line 1] Error at 'print': Expect property name after '.'."],
+    ['a. = 1;', "[line 1] Error at '=': Expect property name after '.'."],
+    ['a.', "[line 1] Error at end: Expect property name after '.'."],
+  ])('reports an error for %j', (source, message) => {
+    expect(errorsOf(source)).toEqual([message]);
+  });
+
+  it('skips a broken property access and parses the next statement', () => {
+    expect(trees('a.; print 2;')).toEqual(['(print 2)']);
+  });
+});
+
+describe('parse: property assignment', () => {
+  it.each([
+    ['a.b = 1', '(set a b 1)'],
+    ['a.b.c = 1', '(set (get a b) c 1)'],
+    ['f().x = 1', '(set (call f) x 1)'],
+    ['a.b = 1 + 2', '(set a b (+ 1 2))'],
+    ['a.b = c.d', '(set a b (get c d))'],
+  ])('parses %s', (source, tree) => {
+    expect(exprTree(source)).toBe(tree);
+  });
+
+  it('associates to the right through two fields', () => {
+    expect(exprTree('a.b = c.d = 1')).toBe('(set a b (set c d 1))');
+  });
+
+  it('associates to the right through a field and a variable', () => {
+    expect(exprTree('a.b = c = 1')).toBe('(set a b (= c 1))');
+  });
+
+  it('allows a field assignment as the value of a variable assignment', () => {
+    expect(exprTree('a = b.c = 1')).toBe('(= a (set b c 1))');
+  });
+
+  it.each([
+    ['a.b() = 1;', "[line 1] Error at '=': Invalid assignment target."],
+    ['(a.b) = 1;', "[line 1] Error at '=': Invalid assignment target."],
+    ['a.b + c = 1;', "[line 1] Error at '=': Invalid assignment target."],
+  ])('rejects the target in %j', (source, message) => {
+    expect(errorsOf(source)).toEqual([message]);
+  });
+});
+
 describe('parse: errors and recovery', () => {
   it.each([
     ['1 + ;', ["[line 1] Error at ';': Expect expression."]],
