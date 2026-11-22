@@ -13,6 +13,7 @@ const errorsOf = (source: string): string[] => {
 const INITIALIZER = "Can't read local variable in its own initializer.";
 const DUPLICATE = 'Already a variable with this name in this scope.';
 const TOP_LEVEL_RETURN = "Can't return from top-level code.";
+const THIS_OUTSIDE_CLASS = "Can't use 'this' outside of a class.";
 
 const depthsOf = (source: string): [string, number][] => {
   const { statements } = parse(scan(source).tokens);
@@ -426,6 +427,54 @@ describe('resolve: methods', () => {
     expect(errorsOf('class A { m() {} } return 1;')).toEqual([
       `[line 1] Error at 'return': ${TOP_LEVEL_RETURN}`,
     ]);
+  });
+});
+
+describe('resolve: this outside a class', () => {
+  it.each([
+    ['this printed at the top level', 'print this;'],
+    ['this in a block at the top level', '{ var copy = this; }'],
+    ['this in a function outside a class', 'fun show() { print this; }'],
+    [
+      'this in a function nested in another function',
+      'fun outer() { fun inner() { return this; } }',
+    ],
+    ['this after a class has ended', 'class A { m() {} } print this;'],
+    [
+      'this in a function declared after a class',
+      'class A {} fun f() { return this; }',
+    ],
+  ])('reports %s', (_, source) => {
+    expect(errorsOf(source)).toEqual([
+      `[line 1] Error at 'this': ${THIS_OUTSIDE_CLASS}`,
+    ]);
+  });
+
+  it.each([
+    [
+      'this in a function nested in a method',
+      'class A { m() { fun f() { return this; } } }',
+    ],
+    [
+      'this in a method of a class declared in a function',
+      'fun make() { class A { m() { return this; } } }',
+    ],
+    [
+      'this in a method after an inner class has ended',
+      'class A { m() { class B { n() { return this; } } return this; } }',
+    ],
+  ])('allows %s', (_, source) => {
+    expect(errorsOf(source)).toEqual([]);
+  });
+
+  it('reports the line of this', () => {
+    expect(errorsOf('var a = 1;\n\nprint this;')).toEqual([
+      `[line 3] Error at 'this': ${THIS_OUTSIDE_CLASS}`,
+    ]);
+  });
+
+  it('reports every use of this outside a class', () => {
+    expect(errorsOf('print this == this;')).toHaveLength(2);
   });
 });
 

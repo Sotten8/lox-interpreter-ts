@@ -21,6 +21,8 @@ export interface ResolveResult {
 
 type FunctionType = 'none' | 'function' | 'method';
 
+type ClassType = 'none' | 'class';
+
 export function resolve(statements: readonly Stmt[]): ResolveResult {
   const resolver = new Resolver();
   resolver.resolveStatements(statements);
@@ -32,6 +34,7 @@ class Resolver {
   readonly errors: CompileError[] = [];
   private readonly scopes: Map<string, boolean>[] = [];
   private currentFunction: FunctionType = 'none';
+  private currentClass: ClassType = 'none';
 
   resolveStatements(statements: readonly Stmt[]): void {
     for (const statement of statements) {
@@ -73,7 +76,9 @@ class Resolver {
         this.define(stmt.name);
         this.resolveFunction(stmt, 'function');
         return;
-      case 'class':
+      case 'class': {
+        const enclosingClass = this.currentClass;
+        this.currentClass = 'class';
         this.declare(stmt.name);
         this.define(stmt.name);
         this.beginScope().set('this', true);
@@ -81,7 +86,9 @@ class Resolver {
           this.resolveFunction(method, 'method');
         }
         this.endScope();
+        this.currentClass = enclosingClass;
         return;
+      }
       case 'return':
         if (this.currentFunction === 'none') {
           this.report(stmt.keyword, "Can't return from top-level code.");
@@ -137,6 +144,10 @@ class Resolver {
         this.resolveExpression(expr.object);
         return;
       case 'this':
+        if (this.currentClass === 'none') {
+          this.report(expr.keyword, "Can't use 'this' outside of a class.");
+          return;
+        }
         this.resolveLocal(expr, 'this');
         return;
       default:

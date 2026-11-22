@@ -15,8 +15,6 @@ export const SKIPPED: ReadonlyMap<string, string> = new Map([
   ['constructor/return_value.lox', 'needs classes (stage 4)'],
   ['inheritance', 'needs classes (stage 4)'],
   ['super', 'needs classes (stage 4)'],
-  ['this/this_at_top_level.lox', 'needs classes (stage 4)'],
-  ['this/this_in_top_level_function.lox', 'needs classes (stage 4)'],
   ['scanning', 'needs the token dump mode (not in MVP)'],
   ['expressions', 'needs the AST dump and bare expression modes (not in MVP)'],
   [
