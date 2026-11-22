@@ -19,6 +19,7 @@
     "test": "vitest run",
     "coverage": "vitest run --coverage",
     "lox": "tsx src/main.ts",
+    "ast": "tsx src/main.ts --ast",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

@@ -5,7 +5,8 @@ import {
 } from './errors';
 import { resolve } from './resolver/resolver';
 import { Interpreter } from './runtime/interpreter';
-import { parse } from './syntax/parser';
+import { printStmt } from './syntax/ast-printer';
+import { parse, type ParseResult } from './syntax/parser';
 import { scan } from './syntax/scanner';
 
 export type ExitCode = 0 | 65 | 70;
@@ -24,13 +25,30 @@ function compileFailure(errors: readonly CompileError[]): RunResult {
   return { output: [], errors: errors.map(formatCompileError), exitCode: 65 };
 }
 
-export function run(source: string, options: RunOptions = {}): RunResult {
+function scanAndParse(source: string): ParseResult {
   const scanned = scan(source);
   const parsed = parse(scanned.tokens);
-  const syntaxErrors = [...scanned.errors, ...parsed.errors];
+  return {
+    statements: parsed.statements,
+    errors: [...scanned.errors, ...parsed.errors],
+  };
+}
 
-  if (syntaxErrors.length > 0) {
-    return compileFailure(syntaxErrors);
+export function printAst(source: string): RunResult {
+  const parsed = scanAndParse(source);
+
+  if (parsed.errors.length > 0) {
+    return compileFailure(parsed.errors);
+  }
+
+  return { output: parsed.statements.map(printStmt), errors: [], exitCode: 0 };
+}
+
+export function run(source: string, options: RunOptions = {}): RunResult {
+  const parsed = scanAndParse(source);
+
+  if (parsed.errors.length > 0) {
+    return compileFailure(parsed.errors);
   }
 
   const resolved = resolve(parsed.statements);
