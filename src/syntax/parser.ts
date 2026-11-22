@@ -1,4 +1,4 @@
-import type { Expr, FunctionStmt, Stmt } from './ast';
+import type { Expr, FunctionStmt, Stmt, VariableExpr } from './ast';
 import { compileErrorAt, type CompileError } from '../errors';
 import type { Token, TokenType } from './token';
 
@@ -63,13 +63,20 @@ class Parser {
 
   private classDeclaration(): Stmt {
     const name = this.consume('IDENTIFIER', 'Expect class name.');
+    let superclass: VariableExpr | null = null;
+    if (this.match('LESS')) {
+      superclass = {
+        kind: 'variable',
+        name: this.consume('IDENTIFIER', 'Expect superclass name.'),
+      };
+    }
     this.consume('LEFT_BRACE', "Expect '{' before class body.");
     const methods: FunctionStmt[] = [];
     while (!this.check('RIGHT_BRACE') && !this.isAtEnd()) {
       methods.push(this.functionDeclaration('method'));
     }
     this.consume('RIGHT_BRACE', "Expect '}' after class body.");
-    return { kind: 'class', name, methods };
+    return { kind: 'class', name, superclass, methods };
   }
 
   private functionDeclaration(kind: 'function' | 'method'): FunctionStmt {

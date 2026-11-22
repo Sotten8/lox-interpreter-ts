@@ -131,6 +131,7 @@ export interface ReturnStmt {
 export interface ClassStmt {
   readonly kind: 'class';
   readonly name: Token;
+  readonly superclass: VariableExpr | null;
   readonly methods: readonly FunctionStmt[];
 }
 

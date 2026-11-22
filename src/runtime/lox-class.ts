@@ -7,14 +7,17 @@ import type { LoxValue } from './values';
 export class LoxClass extends LoxCallable {
   readonly name: string;
   private readonly methods: ReadonlyMap<string, LoxFunction>;
+  private readonly superclass: LoxClass | null;
 
   constructor(
     name: string,
     methods: ReadonlyMap<string, LoxFunction> = new Map(),
+    superclass: LoxClass | null = null,
   ) {
     super();
     this.name = name;
     this.methods = methods;
+    this.superclass = superclass;
   }
 
   get arity(): number {
@@ -22,7 +25,17 @@ export class LoxClass extends LoxCallable {
   }
 
   findMethod(name: string): LoxFunction | undefined {
-    return this.methods.get(name);
+    for (
+      let current: LoxClass | null = this;
+      current !== null;
+      current = current.superclass
+    ) {
+      const method = current.methods.get(name);
+      if (method !== undefined) {
+        return method;
+      }
+    }
+    return undefined;
   }
 
   call(interpreter: Interpreter, args: readonly LoxValue[]): LoxValue {

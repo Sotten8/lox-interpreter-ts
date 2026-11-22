@@ -81,6 +81,15 @@ class Resolver {
         this.currentClass = 'class';
         this.declare(stmt.name);
         this.define(stmt.name);
+        if (stmt.superclass !== null) {
+          if (stmt.superclass.name.lexeme === stmt.name.lexeme) {
+            this.report(
+              stmt.superclass.name,
+              "A class can't inherit from itself.",
+            );
+          }
+          this.resolveExpression(stmt.superclass);
+        }
         this.beginScope().set('this', true);
         for (const method of stmt.methods) {
           this.resolveFunction(

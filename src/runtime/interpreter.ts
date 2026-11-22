@@ -143,6 +143,17 @@ export class Interpreter {
         );
         return;
       case 'class': {
+        let superclass: LoxClass | null = null;
+        if (stmt.superclass !== null) {
+          const value = this.evaluate(stmt.superclass);
+          if (!(value instanceof LoxClass)) {
+            throw new RuntimeError(
+              stmt.superclass.name.line,
+              'Superclass must be a class.',
+            );
+          }
+          superclass = value;
+        }
         const methods = new Map<string, LoxFunction>();
         for (const method of stmt.methods) {
           methods.set(
@@ -156,7 +167,7 @@ export class Interpreter {
         }
         this.environment.define(
           stmt.name.lexeme,
-          new LoxClass(stmt.name.lexeme, methods),
+          new LoxClass(stmt.name.lexeme, methods, superclass),
         );
         return;
       }
