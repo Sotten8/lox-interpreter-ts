@@ -93,6 +93,27 @@ describe('run', () => {
   });
 });
 
+describe('run: edge cases', () => {
+  const sum = (n: number): string =>
+    `fun sum(n) {\n  if (n == 0) return 0;\n  return n + sum(n - 1);\n}\nprint sum(${n});`;
+
+  it('allows 200 nested calls by default', () => {
+    expect(run(sum(199))).toEqual({
+      output: ['19900'],
+      errors: [],
+      exitCode: 0,
+    });
+  });
+
+  it('reports Stack overflow at the 201st nested call by default', () => {
+    expect(run(sum(200))).toEqual({
+      output: [],
+      errors: ['Stack overflow.\n[line 3]'],
+      exitCode: 70,
+    });
+  });
+});
+
 describe('run: limits of the JavaScript engine', () => {
   it('reports an overflow of the JavaScript stack as Stack overflow', () => {
     expect(
@@ -140,6 +161,22 @@ describe('run: limits of the JavaScript engine', () => {
 });
 
 describe('run: nesting limit', () => {
+  it('allows 100 levels of nesting', () => {
+    expect(run(`print ${'('.repeat(100)}7${')'.repeat(100)};`)).toEqual({
+      output: ['7'],
+      errors: [],
+      exitCode: 0,
+    });
+  });
+
+  it('rejects 101 levels of nesting', () => {
+    expect(run(`print ${'('.repeat(101)}7${')'.repeat(101)};`)).toEqual({
+      output: [],
+      errors: ["[line 1] Error at '7': Too much nesting."],
+      exitCode: 65,
+    });
+  });
+
   it('reports too much nesting as a compile error', () => {
     expect(run(`print ${'('.repeat(10_000)}1${')'.repeat(10_000)};`)).toEqual({
       output: [],

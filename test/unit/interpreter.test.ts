@@ -499,6 +499,32 @@ describe('interpret: return', () => {
   });
 });
 
+describe('interpret: closures in loops', () => {
+  it('shares the for loop variable between closures made in the loop', () => {
+    expect(
+      outputOf(
+        'var first; var second; for (var step = 10; step < 30; step = step + 10) { fun show() { return step; } if (step == 10) first = show; else second = show; } print first(); print second();',
+      ),
+    ).toEqual(['30', '30']);
+  });
+
+  it('gives every iteration its own variables declared in the body', () => {
+    expect(
+      outputOf(
+        'var first; var second; for (var step = 10; step < 30; step = step + 10) { var copy = step; fun show() { return copy; } if (copy == 10) first = show; else second = show; } print first(); print second();',
+      ),
+    ).toEqual(['10', '20']);
+  });
+
+  it('captures a variable, not its value when the closure is made', () => {
+    expect(
+      outputOf(
+        'var shown; for (var k = 0; k < 1; k = k + 1) { var label = "before"; fun show() { return label; } label = "after"; shown = show; } print shown();',
+      ),
+    ).toEqual(['after']);
+  });
+});
+
 describe('interpret: call depth', () => {
   it('counts calls correctly after a runtime error', () => {
     const interpreter = new Interpreter(() => undefined, 3);
