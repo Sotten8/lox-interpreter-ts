@@ -768,6 +768,174 @@ describe('interpret: property errors', () => {
   });
 });
 
+describe('interpret: methods', () => {
+  it('calls a method', () => {
+    expect(
+      outputOf('class Box { hello() { print "hi"; } } Box().hello();'),
+    ).toEqual(['hi']);
+  });
+
+  it('passes arguments to a method', () => {
+    expect(
+      outputOf('class Box { add(a, b) { print a + b; } } Box().add(1, 2);'),
+    ).toEqual(['3']);
+  });
+
+  it('returns a value from a method', () => {
+    expect(
+      outputOf('class Box { two() { return 2; } } print Box().two();'),
+    ).toEqual(['2']);
+  });
+
+  it('returns nil from a method without return', () => {
+    expect(outputOf('class Box { m() {} } print Box().m();')).toEqual(['nil']);
+  });
+
+  it('reads a field through this', () => {
+    expect(
+      outputOf(
+        'class Box { show() { print this.x; } } var box = Box(); box.x = "field"; box.show();',
+      ),
+    ).toEqual(['field']);
+  });
+
+  it('writes a field through this', () => {
+    expect(
+      outputOf(
+        'class Box { put() { this.x = 5; } } var box = Box(); box.put(); print box.x;',
+      ),
+    ).toEqual(['5']);
+  });
+
+  it('returns this from a method', () => {
+    expect(
+      outputOf(
+        'class Box { me() { return this; } } var box = Box(); print box.me() == box;',
+      ),
+    ).toEqual(['true']);
+  });
+
+  it('chains method calls through this', () => {
+    expect(
+      outputOf(
+        'class Box { put(v) { this.v = v; return this; } get() { return this.v; } } print Box().put(3).get();',
+      ),
+    ).toEqual(['3']);
+  });
+
+  it('calls another method through this', () => {
+    expect(
+      outputOf('class Box { a() { this.b(); } b() { print "b"; } } Box().a();'),
+    ).toEqual(['b']);
+  });
+
+  it('calls a method recursively through this', () => {
+    expect(
+      outputOf(
+        'class Box { count(n) { if (n > 0) { print n; this.count(n - 1); } } } Box().count(2);',
+      ),
+    ).toEqual(['2', '1']);
+  });
+
+  it('keeps this for a method taken out of the instance', () => {
+    expect(
+      outputOf(
+        'class Box { show() { print this.x; } } var box = Box(); box.x = "kept"; var f = box.show; f();',
+      ),
+    ).toEqual(['kept']);
+  });
+
+  it('keeps the first instance when a method is moved to another one', () => {
+    expect(
+      outputOf(
+        'class Box { show() { print this.x; } } var a = Box(); a.x = "a"; var b = Box(); b.x = "b"; b.f = a.show; b.f();',
+      ),
+    ).toEqual(['a']);
+  });
+
+  it('shares methods between instances but not fields', () => {
+    expect(
+      outputOf(
+        'class Box { inc() { this.n = this.n + 1; } } var a = Box(); a.n = 0; var b = Box(); b.n = 10; a.inc(); b.inc(); print a.n; print b.n;',
+      ),
+    ).toEqual(['1', '11']);
+  });
+
+  it('lets a field hide a method with the same name', () => {
+    expect(
+      outputOf(
+        'class Box { m() { print "method"; } } var box = Box(); box.m = "field"; print box.m;',
+      ),
+    ).toEqual(['field']);
+  });
+
+  it('keeps methods of different classes apart', () => {
+    expect(
+      outputOf(
+        'class A { m() { print "A"; } } class B { m() { print "B"; } } A().m(); B().m();',
+      ),
+    ).toEqual(['A', 'B']);
+  });
+
+  it('closes over a variable of the enclosing block', () => {
+    expect(
+      outputOf(
+        '{ var x = "local"; class Box { m() { print x; } } Box().m(); }',
+      ),
+    ).toEqual(['local']);
+  });
+
+  it('sees a global declared after the class', () => {
+    expect(
+      outputOf('class Box { m() { print late; } } var late = "ok"; Box().m();'),
+    ).toEqual(['ok']);
+  });
+
+  it('keeps this in a function created inside a method', () => {
+    expect(
+      outputOf(
+        'class Box { make() { fun inner() { return this.v; } return inner; } } var box = Box(); box.v = "captured"; var f = box.make(); print f();',
+      ),
+    ).toEqual(['captured']);
+  });
+
+  it('refers to its own class by name', () => {
+    expect(
+      outputOf('class Box { copy() { return Box(); } } print Box().copy();'),
+    ).toEqual(['Box instance']);
+  });
+
+  it('calls a method of a class declared in a function', () => {
+    expect(
+      outputOf(
+        'fun make() { class Box { m() { return "made"; } } return Box(); } print make().m();',
+      ),
+    ).toEqual(['made']);
+  });
+
+  it('prints a bound method as a function', () => {
+    expect(outputOf('class Box { m() {} } print Box().m;')).toEqual(['<fn m>']);
+  });
+
+  it('calls a method named like a JavaScript property', () => {
+    expect(
+      outputOf('class Box { toString() { print "own"; } } Box().toString();'),
+    ).toEqual(['own']);
+  });
+
+  it('rejects too few arguments for a method', () => {
+    expect(errorOf('class Box { m(a) {} } Box().m();')).toBe(
+      'Expected 1 arguments but got 0.\n[line 1]',
+    );
+  });
+
+  it('rejects too many arguments for a method', () => {
+    expect(errorOf('class Box { m() {} } Box().m(1);')).toBe(
+      'Expected 0 arguments but got 1.\n[line 1]',
+    );
+  });
+});
+
 describe('interpret: binding of variables', () => {
   it('uses the variable declared above the function, not below', () => {
     expect(

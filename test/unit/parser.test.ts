@@ -486,6 +486,63 @@ describe('parse: property assignment', () => {
   });
 });
 
+describe('parse: methods', () => {
+  it.each([
+    ['class A { m() {} }', '(class A (fun m ()))'],
+    ['class A { m(a, b) { print a; } }', '(class A (fun m (a b) (print a)))'],
+    ['class A { m() {} n() {} }', '(class A (fun m ()) (fun n ()))'],
+    ['class A { m() { return 1; } }', '(class A (fun m () (return 1)))'],
+    ['class A { m() { fun f() {} } }', '(class A (fun m () (fun f ())))'],
+  ])('parses %s', (source, tree) => {
+    expect(trees(source)).toEqual([tree]);
+  });
+
+  it('parses a class with methods next to other statements', () => {
+    expect(trees('class A { m() {} } print 1;')).toEqual([
+      '(class A (fun m ()))',
+      '(print 1)',
+    ]);
+  });
+
+  it.each([
+    ['class A { 1() {} }', "[line 1] Error at '1': Expect method name."],
+    ['class A { fun m() {} }', "[line 1] Error at 'fun': Expect method name."],
+    ['class A { m }', "[line 1] Error at '}': Expect '(' after method name."],
+    [
+      'class A { m() }',
+      "[line 1] Error at '}': Expect '{' before method body.",
+    ],
+    ['class A { m() {}', "[line 1] Error at end: Expect '}' after class body."],
+  ])('reports an error for %j', (source, message) => {
+    expect(errorsOf(source)).toEqual([message]);
+  });
+});
+
+describe('parse: this', () => {
+  it.each([
+    ['this', 'this'],
+    ['this.x', '(get this x)'],
+    ['this.x = 1', '(set this x 1)'],
+    ['this.m()', '(call (get this m))'],
+    ['this + 1', '(+ this 1)'],
+    ['f(this)', '(call f this)'],
+  ])('parses %s', (source, tree) => {
+    expect(exprTree(source)).toBe(tree);
+  });
+
+  it('parses this inside a method', () => {
+    expect(trees('class A { m() { return this; } }')).toEqual([
+      '(class A (fun m () (return this)))',
+    ]);
+  });
+
+  it('rejects this as an assignment target', () => {
+    expect(errorsOf('this = 1;')).toEqual([
+      "[line 1] Error at '=': Invalid assignment target.",
+    ]);
+  });
+});
+
 describe('parse: errors and recovery', () => {
   it.each([
     ['1 + ;', ["[line 1] Error at ';': Expect expression."]],

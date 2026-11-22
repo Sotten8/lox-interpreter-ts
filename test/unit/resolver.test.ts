@@ -17,7 +17,7 @@ const TOP_LEVEL_RETURN = "Can't return from top-level code.";
 const depthsOf = (source: string): [string, number][] => {
   const { statements } = parse(scan(source).tokens);
   return [...resolve(statements).locals].map(([expr, depth]) => [
-    expr.name.lexeme,
+    expr.kind === 'this' ? expr.keyword.lexeme : expr.name.lexeme,
     depth,
   ]);
 };
@@ -365,6 +365,66 @@ describe('resolve: properties', () => {
   it('reports a variable read in its own initializer through a set value', () => {
     expect(errorsOf('{ var a = g.b = a; }')).toEqual([
       `[line 1] Error at 'a': ${INITIALIZER}`,
+    ]);
+  });
+});
+
+describe('resolve: methods', () => {
+  it('resolves this one level up from a method body', () => {
+    expect(depthsOf('class A { m() { this; } }')).toEqual([['this', 1]]);
+  });
+
+  it('adds a level for this inside a block of a method', () => {
+    expect(depthsOf('class A { m() { { this; } } }')).toEqual([['this', 2]]);
+  });
+
+  it('adds a level for this inside a function nested in a method', () => {
+    expect(depthsOf('class A { m() { fun f() { this; } } }')).toEqual([
+      ['this', 2],
+    ]);
+  });
+
+  it('gives every use of this its own entry', () => {
+    expect(depthsOf('class A { m() { this; this; } }')).toEqual([
+      ['this', 1],
+      ['this', 1],
+    ]);
+  });
+
+  it('resolves this as the object of a get', () => {
+    expect(depthsOf('class A { m() { this.x; } }')).toEqual([['this', 1]]);
+  });
+
+  it('resolves this as the object of a set', () => {
+    expect(depthsOf('class A { m() { this.x = 1; } }')).toEqual([['this', 1]]);
+  });
+
+  it('keeps a parameter at depth 0 and this at depth 1', () => {
+    expect(depthsOf('class A { m(a) { a; this; } }')).toEqual([
+      ['a', 0],
+      ['this', 1],
+    ]);
+  });
+
+  it('reads a variable of the enclosing block from a method', () => {
+    expect(depthsOf('{ var v; class A { m() { v; } } }')).toEqual([['v', 2]]);
+  });
+
+  it('reads the class name from a method inside a block', () => {
+    expect(depthsOf('{ class A { m() { A; } } }')).toEqual([['A', 2]]);
+  });
+
+  it('does not see another method by its bare name', () => {
+    expect(depthsOf('class A { m() {} n() { m; } }')).toEqual([]);
+  });
+
+  it('allows return with a value in a method', () => {
+    expect(errorsOf('class A { m() { return 1; } }')).toEqual([]);
+  });
+
+  it('still rejects return at top level after a class', () => {
+    expect(errorsOf('class A { m() {} } return 1;')).toEqual([
+      `[line 1] Error at 'return': ${TOP_LEVEL_RETURN}`,
     ]);
   });
 });

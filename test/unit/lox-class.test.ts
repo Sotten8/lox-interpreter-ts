@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { RuntimeError } from '../../src/errors';
 import type { Token } from '../../src/syntax/token';
-import { LoxCallable } from '../../src/runtime/callable';
+import { LoxCallable, LoxFunction } from '../../src/runtime/callable';
+import { Environment } from '../../src/runtime/environment';
+import { parse } from '../../src/syntax/parser';
+import { scan } from '../../src/syntax/scanner';
 import { Interpreter } from '../../src/runtime/interpreter';
 import { LoxClass, LoxInstance } from '../../src/runtime/lox-class';
 
@@ -111,5 +114,83 @@ describe('LoxInstance', () => {
 
   it('is printed as the name of its class and "instance"', () => {
     expect(newInstance().toString()).toBe('Box instance');
+  });
+});
+
+const methodNamed = (name: string, params = ''): LoxFunction => {
+  const { statements } = parse(
+    scan(`class Box { ${name}(${params}) {} }`).tokens,
+  );
+  const declaration = statements[0];
+  if (declaration?.kind !== 'class') {
+    throw new Error('Expected a class declaration.');
+  }
+  const [method] = declaration.methods;
+  if (method === undefined) {
+    throw new Error('Expected a method.');
+  }
+  return new LoxFunction(method, new Environment());
+};
+
+const classWith = (...methods: [string, LoxFunction][]): LoxClass =>
+  new LoxClass('Box', new Map(methods));
+
+describe('LoxClass methods', () => {
+  it('finds a method by its name', () => {
+    const method = methodNamed('m');
+
+    expect(classWith(['m', method]).findMethod('m')).toBe(method);
+  });
+
+  it('finds nothing for a name that is not a method', () => {
+    expect(classWith(['m', methodNamed('m')]).findMethod('n')).toBeUndefined();
+  });
+
+  it('has no methods by default', () => {
+    expect(new LoxClass('Box').findMethod('m')).toBeUndefined();
+  });
+
+  it('does not find a method named like a JavaScript property', () => {
+    expect(new LoxClass('Box').findMethod('toString')).toBeUndefined();
+  });
+});
+
+describe('LoxInstance methods', () => {
+  it('returns a method as a function', () => {
+    const instance = new LoxInstance(classWith(['m', methodNamed('m')]));
+
+    expect(instance.get(identifier('m'))).toBeInstanceOf(LoxFunction);
+  });
+
+  it('returns a new function, not the one stored in the class', () => {
+    const method = methodNamed('m');
+    const instance = new LoxInstance(classWith(['m', method]));
+
+    expect(instance.get(identifier('m'))).not.toBe(method);
+  });
+
+  it('keeps the arity of the method', () => {
+    const instance = new LoxInstance(
+      classWith(['m', methodNamed('m', 'a, b')]),
+    );
+    const bound = instance.get(identifier('m')) as LoxFunction;
+
+    expect(bound.arity).toBe(2);
+  });
+
+  it('prefers a field over a method with the same name', () => {
+    const instance = new LoxInstance(classWith(['m', methodNamed('m')]));
+
+    instance.set(identifier('m'), 1);
+
+    expect(instance.get(identifier('m'))).toBe(1);
+  });
+
+  it('reports a name that is neither a field nor a method', () => {
+    const instance = new LoxInstance(classWith(['m', methodNamed('m')]));
+
+    expect(() => instance.get(identifier('n'))).toThrow(
+      "Undefined property 'n'.",
+    );
   });
 });
