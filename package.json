@@ -26,6 +26,8 @@
   "devDependencies": {
     "@emnapi/core": "2.0.0-beta.2",
     "@emnapi/runtime": "2.0.0-beta.2",
+    "@stryker-mutator/core": "^10.1.1",
+    "@stryker-mutator/vitest-runner": "^10.1.1",
     "@types/node": "^26.6.6",
     "@vitest/coverage-v8": "^5.1.0",
     "fast-check": "^4.10.2",

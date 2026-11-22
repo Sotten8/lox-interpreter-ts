@@ -1,0 +1,10 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "testRunner": "vitest",
+  "mutate": ["src/**/*.ts", "!src/main.ts"],
+  "coverageAnalysis": "perTest",
+  "disableBail": true,
+  "tsconfigFile": "",
+  "reporters": ["html", "json", "clear-text", "progress"],
+  "clearTextReporter": { "logTests": false }
+}
