@@ -111,7 +111,10 @@ describe('parse: variables', () => {
       '(var b 3)',
       '(print b)',
     ]);
-    expect(result.errors).toHaveLength(2);
+    expect(result.errors.map(formatCompileError)).toEqual([
+      "[line 1] Error at '1': Expect variable name.",
+      "[line 3] Error at ';': Expect variable name.",
+    ]);
   });
 });
 
@@ -128,14 +131,13 @@ describe('parse: assignment', () => {
 
   it('reports a target that is not a variable and keeps parsing', () => {
     for (const source of ['1 = 2;', 'a + b = c;', '(a) = 1;', '-a = 1;']) {
-      const errors = errorsOf(source);
-
-      expect(errors, source).toHaveLength(1);
-      expect(errors[0], source).toMatch(
-        /^\[line 1\] Error at '=': Invalid assignment target\.$/,
-      );
+      expect(errorsOf(source), source).toEqual([
+        "[line 1] Error at '=': Invalid assignment target.",
+      ]);
     }
-    expect(errorsOf('a + b = c;\nprint 1;')).toHaveLength(1);
+    expect(errorsOf('a + b = c;\nprint 1;')).toEqual([
+      "[line 1] Error at '=': Invalid assignment target.",
+    ]);
     expect(trees('a + b = c;\nprint 1;')).toEqual([
       '(expr (+ a b))',
       '(print 1)',
@@ -180,7 +182,9 @@ describe('parse: blocks', () => {
       '(block (print 2))',
       '(print 3)',
     ]);
-    expect(result.errors).toHaveLength(1);
+    expect(result.errors.map(formatCompileError)).toEqual([
+      "[line 1] Error at ';': Expect expression.",
+    ]);
   });
 });
 
@@ -739,26 +743,42 @@ describe('parse: errors and recovery', () => {
     const result = parseSource('print ; print 2; print ;');
 
     expect(result.statements.map(printStmt)).toEqual(['(print 2)']);
-    expect(result.errors).toHaveLength(2);
+    expect(result.errors.map(formatCompileError)).toEqual([
+      "[line 1] Error at ';': Expect expression.",
+      "[line 1] Error at ';': Expect expression.",
+    ]);
   });
 
   it('stops skipping before print', () => {
     const result = parseSource('1 + * 2\nprint 3;');
 
     expect(result.statements.map(printStmt)).toEqual(['(print 3)']);
-    expect(result.errors).toHaveLength(1);
+    expect(result.errors.map(formatCompileError)).toEqual([
+      "[line 1] Error at '*': Expect expression.",
+    ]);
   });
 
-  it('stops skipping before other statement keywords', () => {
-    const keywords = ['class', 'fun', 'var', 'for', 'if', 'while', 'return'];
-
-    for (const keyword of keywords) {
-      expect(errorsOf(`1 + * 2\n${keyword} 3 4;`), keyword).toHaveLength(2);
-    }
+  it.each([
+    ['class', "[line 2] Error at '3': Expect class name."],
+    ['fun', "[line 2] Error at '3': Expect function name."],
+    ['var', "[line 2] Error at '3': Expect variable name."],
+    ['for', "[line 2] Error at '3': Expect '(' after 'for'."],
+    ['if', "[line 2] Error at '3': Expect '(' after 'if'."],
+    ['while', "[line 2] Error at '3': Expect '(' after 'while'."],
+    ['return', "[line 2] Error at '4': Expect ';' after return value."],
+  ])('stops skipping before %s', (keyword, nextError) => {
+    expect(errorsOf(`1 + * 2\n${keyword} 3 4;`)).toEqual([
+      "[line 1] Error at '*': Expect expression.",
+      nextError,
+    ]);
   });
 
   it('reports one error for each broken statement', () => {
-    expect(errorsOf('1 +;\n2 *;\n(3;')).toHaveLength(3);
+    expect(errorsOf('1 +;\n2 *;\n(3;')).toEqual([
+      "[line 1] Error at ';': Expect expression.",
+      "[line 2] Error at ';': Expect expression.",
+      "[line 3] Error at ';': Expect ')' after expression.",
+    ]);
   });
 });
 
