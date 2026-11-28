@@ -203,11 +203,16 @@ describe('resolve: a variable in its own initializer', () => {
   });
 
   it('reports every read of the variable', () => {
-    expect(errorsOf('{ var a = a + a; }')).toHaveLength(2);
+    expect(errorsOf('{ var a = a + a; }')).toEqual([
+      `[line 1] Error at 'a': ${INITIALIZER}`,
+      `[line 1] Error at 'a': ${INITIALIZER}`,
+    ]);
   });
 
   it('stops reporting after the initializer', () => {
-    expect(errorsOf('{ var a = a; print a; }')).toHaveLength(1);
+    expect(errorsOf('{ var a = a; print a; }')).toEqual([
+      `[line 1] Error at 'a': ${INITIALIZER}`,
+    ]);
   });
 });
 
@@ -236,7 +241,10 @@ describe('resolve: duplicate variables', () => {
   });
 
   it('reports every repeat', () => {
-    expect(errorsOf('{ var a; var a; var a; }')).toHaveLength(2);
+    expect(errorsOf('{ var a; var a; var a; }')).toEqual([
+      `[line 1] Error at 'a': ${DUPLICATE}`,
+      `[line 1] Error at 'a': ${DUPLICATE}`,
+    ]);
   });
 });
 
@@ -548,7 +556,10 @@ describe('resolve: this outside a class', () => {
   });
 
   it('reports every use of this outside a class', () => {
-    expect(errorsOf('print this == this;')).toHaveLength(2);
+    expect(errorsOf('print this == this;')).toEqual([
+      `[line 1] Error at 'this': ${THIS_OUTSIDE_CLASS}`,
+      `[line 1] Error at 'this': ${THIS_OUTSIDE_CLASS}`,
+    ]);
   });
 });
 
