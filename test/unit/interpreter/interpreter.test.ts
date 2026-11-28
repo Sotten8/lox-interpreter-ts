@@ -1459,3 +1459,90 @@ describe('interpret: runtime errors', () => {
     ).toThrow('Unexpected value: {"kind":"unknown"}');
   });
 });
+
+const OPERAND_SETUP = 'fun greet() {} class Crate {} var crate = Crate();';
+
+const errorWithOperands = (expression: string): string | null =>
+  errorOf(`${OPERAND_SETUP} ${expression};`);
+
+describe.each(['-', '*', '/', '<', '<=', '>', '>='])(
+  'interpret: operands of %s',
+  (operator) => {
+    it.each([
+      ['"ink"', '"pen"'],
+      ['nil', 'nil'],
+      ['true', 'false'],
+      ['nil', '3'],
+      ['3', 'nil'],
+      ['false', '3'],
+      ['3', 'true'],
+      ['greet', 'greet'],
+      ['clock', '3'],
+      ['Crate', '3'],
+      ['3', 'crate'],
+      ['crate', 'crate'],
+    ])('rejects %s and %s', (left, right) => {
+      expect(errorWithOperands(`${left} ${operator} ${right}`)).toBe(
+        'Operands must be numbers.\n[line 1]',
+      );
+    });
+  },
+);
+
+describe('interpret: operands of +', () => {
+  it.each([
+    ['nil', 'nil'],
+    ['true', 'false'],
+    ['greet', '"ink"'],
+    ['"ink"', 'Crate'],
+    ['crate', '3'],
+    ['3', 'clock'],
+    ['crate', 'crate'],
+  ])('rejects %s and %s', (left, right) => {
+    expect(errorWithOperands(`${left} + ${right}`)).toBe(
+      'Operands must be two numbers or two strings.\n[line 1]',
+    );
+  });
+});
+
+describe('interpret: operand of unary minus', () => {
+  it.each(['true', 'greet', 'clock', 'Crate', 'crate'])(
+    'rejects %s',
+    (value) => {
+      expect(errorWithOperands(`-${value}`)).toBe(
+        'Operand must be a number.\n[line 1]',
+      );
+    },
+  );
+});
+
+describe.each([
+  ['if', 'if (subject) print true; else print false;'],
+  [
+    'while',
+    'fun probe() { while (subject) return true; return false; } print probe();',
+  ],
+  [
+    'for',
+    'fun probe() { for (; subject;) return true; return false; } print probe();',
+  ],
+  ['!', 'print !!subject;'],
+  ['and', 'var seen = false; subject and (seen = true); print seen;'],
+  ['or', 'var seen = true; subject or (seen = false); print seen;'],
+])('interpret: truthiness in %s', (_construct, probe) => {
+  it.each([
+    ['nil', false],
+    ['false', false],
+    ['true', true],
+    ['0', true],
+    ['-0', true],
+    ['0 / 0', true],
+    ['""', true],
+    ['"false"', true],
+    ['clock', true],
+  ])('treats %s as %s', (value, truthy) => {
+    expect(outputOf(`var subject = ${value}; ${probe}`)).toEqual([
+      String(truthy),
+    ]);
+  });
+});
