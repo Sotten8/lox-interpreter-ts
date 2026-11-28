@@ -239,6 +239,12 @@ describe('printAst', () => {
     });
   });
 
+  it('prints a number too large for a double as Infinity', () => {
+    expect(printAst(`print ${'9'.repeat(400)};`).output).toEqual([
+      '(print Infinity)',
+    ]);
+  });
+
   it('prints a tree nested up to the limit', () => {
     const n = MAX_NESTING;
 
